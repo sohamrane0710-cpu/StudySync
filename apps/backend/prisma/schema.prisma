@@ -275,7 +275,7 @@ model Credential {
 model Session {
   id           String   @id @default(uuid()) @db.Uuid
   userId       String   @db.Uuid
-  sessionToken String   @unique
+  tokenHash    String   @unique
   expiresAt    DateTime
   lastUsedAt   DateTime?
   createdAt    DateTime @default(now())
@@ -284,5 +284,5 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([sessionToken])
+  @@index([tokenHash])
 }
