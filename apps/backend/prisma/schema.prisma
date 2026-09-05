@@ -1,0 +1,260 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ENUMS
+
+enum TimerStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum GroupVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum GroupRole {
+  OWNER
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// MODELS
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  username    String   @unique
+  email       String   @unique
+  displayName String?
+  avatarUrl   String?
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  accounts           Account[]
+  timerModes         TimerMode[]
+  timerSessions      TimerSession[]
+  studySessions      StudySession[]
+  dailyTargets       DailyTarget[]
+  labels             Label[]
+  roomsCreated       StudyRoom[]
+  roomMemberships    RoomMember[]
+  groupsCreated      Group[]
+  groupMemberships   GroupMember[]
+  communitiesCreated Community[]
+  invitesSent        Invite[]       @relation("SentInvites")
+  invitesReceived    Invite[]       @relation("ReceivedInvites")
+}
+
+model Account {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  provider          String
+  providerAccountId String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model TimerMode {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  name         String
+  description  String?
+  stagesConfig Json
+  loop         Boolean
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timerSessions TimerSession[]
+
+  @@index([userId])
+}
+
+model TimerSession {
+  id                String      @id @default(uuid()) @db.Uuid
+  userId            String      @db.Uuid
+  timerModeId       String      @db.Uuid
+  status            TimerStatus @default(PENDING)
+  currentStageIndex Int         @default(0)
+  startedAt         DateTime?
+  targetEndTime     DateTime?
+  pausedAt          DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timerMode     TimerMode      @relation(fields: [timerModeId], references: [id], onDelete: Cascade)
+  studySessions StudySession[]
+
+  @@index([userId])
+  @@index([timerModeId])
+}
+
+model StudySession {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  timerSessionId  String?  @db.Uuid
+  labelId         String?  @db.Uuid
+  startedAt       DateTime
+  endedAt         DateTime
+  durationSeconds Int
+  createdAt       DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timerSession TimerSession? @relation(fields: [timerSessionId], references: [id], onDelete: SetNull)
+  label        Label?        @relation(fields: [labelId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([timerSessionId])
+  @@index([labelId])
+}
+
+model DailyTarget {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  date          DateTime @db.Date
+  targetSeconds Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+model Label {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studySessions StudySession[]
+
+  @@unique([userId, name])
+}
+
+model StudyRoom {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  roomMembers RoomMember[]
+
+  @@index([createdById])
+}
+
+model RoomMember {
+  roomId   String   @db.Uuid
+  userId   String   @db.Uuid
+  joinedAt DateTime @default(now())
+
+  room StudyRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@index([userId])
+}
+
+model Group {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  visibility  GroupVisibility @default(PRIVATE)
+  createdById String          @db.Uuid
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  createdBy       User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  groupMembers    GroupMember[]
+  communityGroups CommunityGroup[]
+  invites         Invite[]
+
+  @@index([createdById])
+}
+
+model GroupMember {
+  groupId  String    @db.Uuid
+  userId   String    @db.Uuid
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+model Community {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy       User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  communityGroups CommunityGroup[]
+
+  @@index([createdById])
+}
+
+model CommunityGroup {
+  communityId String @db.Uuid
+  groupId     String @db.Uuid
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([communityId, groupId])
+  @@index([groupId])
+}
+
+model Invite {
+  id          String       @id @default(uuid()) @db.Uuid
+  senderId    String       @db.Uuid
+  recipientId String       @db.Uuid
+  groupId     String       @db.Uuid
+  status      InviteStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  respondedAt DateTime?
+
+  sender    User  @relation("SentInvites", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User  @relation("ReceivedInvites", fields: [recipientId], references: [id], onDelete: Cascade)
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([groupId])
+}
