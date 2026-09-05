@@ -108,7 +108,7 @@ model TimerSession {
   updatedAt         DateTime    @updatedAt
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  timerMode     TimerMode      @relation(fields: [timerModeId], references: [id], onDelete: Cascade)
+  timerMode     TimerMode      @relation(fields: [timerModeId], references: [id], onDelete: Restrict)
   studySessions StudySession[]
 
   @@index([userId])
