@@ -50,6 +50,8 @@ model User {
   updatedAt   DateTime @updatedAt
 
   // Relationships
+  credential         Credential?
+  sessions           Session[]
   accounts           Account[]
   timerModes         TimerMode[]
   timerSessions      TimerSession[]
@@ -258,4 +260,29 @@ model Invite {
   @@index([senderId])
   @@index([recipientId])
   @@index([groupId])
+}
+
+model Credential {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  sessionToken String   @unique
+  expiresAt    DateTime
+  lastUsedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionToken])
 }
