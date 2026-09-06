@@ -14,8 +14,12 @@ StudySync is built as a separate frontend and backend application housed within 
 2. Business logic is isolated from UI components (Frontend: UI -> Hooks -> API).
 3. Business rules are decoupled from controllers/gateways (Backend: Controller -> Service -> Prisma).
 
-## Timer Architecture
-To ensure accurate analytics, timers are separated into three concepts:
-- **TimerMode**: Configuration defining stages, durations, and rules.
-- **TimerSession**: Active, real-time execution of a mode.
-- **StudySession**: Immutable historical record of completed study time.
+## Detailed Architecture Documents
+
+For deep-dive documentation on specific systems, please refer to the following specifications:
+
+- [Product Specification](PRODUCT_SPEC.md)
+- [Database Schema & ERD](DATABASE.md)
+- [Timer Engine](TIMER_ENGINE.md)
+- [Analytics & Labels](ANALYTICS.md)
+- [Authentication](AUTH.md)

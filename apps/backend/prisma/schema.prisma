@@ -70,11 +70,12 @@ model User {
   labels             Label[]
   roomsCreated       StudyRoom[]
   roomMemberships    RoomMember[]
+  roomParticipations RoomParticipation[]
   groupsCreated      Group[]
   groupMemberships   GroupMember[]
   communitiesCreated Community[]
-  invitesSent        Invite[]       @relation("SentInvites")
-  invitesReceived    Invite[]       @relation("ReceivedInvites")
+  invitesSent        Invite[]            @relation("SentInvites")
+  invitesReceived    Invite[]            @relation("ReceivedInvites")
 }
 
 model Account {
@@ -109,7 +110,8 @@ model TimerMode {
 
 model TimerSession {
   id                String      @id @default(uuid()) @db.Uuid
-  userId            String      @db.Uuid
+  userId            String?     @db.Uuid // Optional to support shared room timers
+  roomId            String?     @db.Uuid // Links to a StudyRoom for shared timers
   timerModeId       String      @db.Uuid
   status            TimerStatus @default(PENDING)
   currentStageIndex Int         @default(0)
@@ -120,31 +122,51 @@ model TimerSession {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  timerMode     TimerMode      @relation(fields: [timerModeId], references: [id], onDelete: Restrict)
-  studySessions StudySession[]
+  user               User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room               StudyRoom?          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  timerMode          TimerMode           @relation(fields: [timerModeId], references: [id], onDelete: Restrict)
+  studySessions      StudySession[]
+  roomParticipations RoomParticipation[]
 
   @@index([userId])
+  @@index([roomId])
   @@index([timerModeId])
+}
+
+model RoomParticipation {
+  id             String    @id @default(uuid()) @db.Uuid
+  roomId         String    @db.Uuid
+  timerSessionId String    @db.Uuid
+  userId         String    @db.Uuid
+  startedAt      DateTime
+  endedAt        DateTime?
+
+  room         StudyRoom    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  timerSession TimerSession @relation(fields: [timerSessionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([timerSessionId])
+  @@index([userId])
 }
 
 model StudySession {
   id              String   @id @default(uuid()) @db.Uuid
   userId          String   @db.Uuid
   timerSessionId  String?  @db.Uuid
-  labelId         String?  @db.Uuid
   startedAt       DateTime
   endedAt         DateTime
   durationSeconds Int
   createdAt       DateTime @default(now())
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  timerSession TimerSession? @relation(fields: [timerSessionId], references: [id], onDelete: SetNull)
-  label        Label?        @relation(fields: [labelId], references: [id], onDelete: SetNull)
+  user                 User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timerSession         TimerSession?                     @relation(fields: [timerSessionId], references: [id], onDelete: SetNull)
+  labels               Label[]
+  groupContributions   StudySessionGroupContribution[]
+  labelGroupSelections StudySessionLabelGroupSelection[]
 
   @@index([userId])
   @@index([timerSessionId])
-  @@index([labelId])
 }
 
 model DailyTarget {
@@ -168,10 +190,85 @@ model Label {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  studySessions StudySession[]
+  user                 User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studySessions        StudySession[]
+  associations         LabelAssociation[]
+  labelGroupSelections StudySessionLabelGroupSelection[]
 
   @@unique([userId, name])
+}
+
+model GroupLabel {
+  id        String   @id @default(uuid()) @db.Uuid
+  groupId   String   @db.Uuid
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group                Group                             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  associations         LabelAssociation[]
+  dimensions           ContributionDimension[]
+  labelGroupSelections StudySessionLabelGroupSelection[]
+
+  @@unique([groupId, name])
+}
+
+model LabelAssociation {
+  id           String   @id @default(uuid()) @db.Uuid
+  labelId      String   @db.Uuid // Personal label
+  groupLabelId String   @db.Uuid // Group label
+  createdAt    DateTime @default(now())
+
+  label      Label      @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  groupLabel GroupLabel @relation(fields: [groupLabelId], references: [id], onDelete: Cascade)
+
+  @@unique([labelId, groupLabelId])
+}
+
+model StudySessionGroupContribution {
+  id              String   @id @default(uuid()) @db.Uuid
+  studySessionId  String   @db.Uuid
+  groupId         String   @db.Uuid
+  durationSeconds Int // Counted ONCE per group per session
+  createdAt       DateTime @default(now())
+
+  studySession StudySession            @relation(fields: [studySessionId], references: [id], onDelete: Cascade)
+  group        Group                   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  dimensions   ContributionDimension[]
+
+  @@unique([studySessionId, groupId])
+  @@index([groupId])
+}
+
+model StudySessionLabelGroupSelection {
+  id             String   @id @default(uuid()) @db.Uuid
+  studySessionId String   @db.Uuid
+  labelId        String   @db.Uuid
+  groupLabelId   String   @db.Uuid
+  isIncluded     Boolean // True means explicitly included, false means explicitly excluded
+  createdAt      DateTime @default(now())
+
+  studySession StudySession @relation(fields: [studySessionId], references: [id], onDelete: Cascade)
+  label        Label        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  groupLabel   GroupLabel   @relation(fields: [groupLabelId], references: [id], onDelete: Cascade)
+
+  @@unique([studySessionId, labelId, groupLabelId])
+  @@index([studySessionId])
+  @@index([labelId])
+  @@index([groupLabelId])
+}
+
+model ContributionDimension {
+  id                     String  @id @default(uuid()) @db.Uuid
+  contributionId         String  @db.Uuid
+  groupLabelId           String? @db.Uuid // Optional in case GroupLabel is later deleted
+  groupLabelNameSnapshot String // Immutable snapshot of the name
+
+  contribution StudySessionGroupContribution @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+  groupLabel   GroupLabel?                   @relation(fields: [groupLabelId], references: [id], onDelete: SetNull)
+
+  @@unique([contributionId, groupLabelNameSnapshot]) // Prevent duplicate dimensions in a single contribution
 }
 
 model StudyRoom {
@@ -183,8 +280,10 @@ model StudyRoom {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  roomMembers RoomMember[]
+  createdBy          User                @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  roomMembers        RoomMember[]
+  timerSessions      TimerSession[]
+  roomParticipations RoomParticipation[]
 
   @@index([createdById])
 }
@@ -211,10 +310,12 @@ model Group {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  createdBy       User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy       User                            @relation(fields: [createdById], references: [id], onDelete: Cascade)
   groupMembers    GroupMember[]
   communityGroups CommunityGroup[]
   invites         Invite[]
+  groupLabels     GroupLabel[]
+  contributions   StudySessionGroupContribution[]
 
   @@index([createdById])
 }
