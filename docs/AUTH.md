@@ -33,10 +33,10 @@ During implementation, the following targeted schema changes were applied:
 
 ### Login (`POST /auth/login`)
 
-- Accepts `email` and `password`.
-- Normalizes `email`.
+- Accepts `identifier` (username or email) and `password`.
+- Matches against the database case-insensitively since both `email` and `username` utilize PostgreSQL `citext`.
 - Verifies the given password against `Credential.passwordHash` with Argon2id.
-- On failure (wrong email or password), returns generic `401 Unauthorized`.
+- On failure (wrong identifier or password), returns generic `401 Unauthorized`.
 - Generates 32-byte cryptographically secure random secret (`rawToken`).
 - Hashes `rawToken` with SHA-256 to create `tokenHash`.
 - Stores `tokenHash` in the database.

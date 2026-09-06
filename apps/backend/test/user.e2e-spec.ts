@@ -41,7 +41,7 @@ describe('UserController (e2e)', () => {
     await authService.register({ email: 'taken@example.com', password: 'password123' });
     const takenRes = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'taken@example.com', password: 'password123' });
+      .send({ identifier: 'taken@example.com', password: 'password123' });
     const takenCookie = takenRes.headers['set-cookie'][0].split(';')[0];
     await request(app.getHttpServer())
       .post('/users/onboarding')
@@ -54,12 +54,12 @@ describe('UserController (e2e)', () => {
 
     const loginRes1 = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'onboard1@example.com', password: 'password123' });
+      .send({ identifier: 'onboard1@example.com', password: 'password123' });
     sessionCookie = loginRes1.headers['set-cookie'][0].split(';')[0];
 
     const loginRes2 = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'onboard2@example.com', password: 'password123' });
+      .send({ identifier: 'onboard2@example.com', password: 'password123' });
     onboardedSessionCookie = loginRes2.headers['set-cookie'][0].split(';')[0];
   });
 

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import cookieParser from 'cookie-parser';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import * as argon2 from 'argon2';
 import { describe, beforeAll, afterAll, it, expect } from 'vitest';
 
 describe('AuthController (e2e)', () => {
@@ -25,13 +26,23 @@ describe('AuthController (e2e)', () => {
     
     // Clean up test users
     await prisma.user.deleteMany({
-      where: { email: { in: ['test@example.com', 'test2@example.com'] } },
+      where: { email: { in: ['test@example.com', 'test2@example.com', 'loginuser@example.com'] } },
+    });
+
+    const passwordHash = await argon2.hash('password123');
+    await prisma.user.create({
+      data: {
+        email: 'loginuser@example.com',
+        username: 'LoginUser123',
+        onboardingCompleted: true,
+        credential: { create: { passwordHash } },
+      }
     });
   });
 
   afterAll(async () => {
     await prisma.user.deleteMany({
-      where: { email: { in: ['test@example.com', 'test2@example.com'] } },
+      where: { email: { in: ['test@example.com', 'test2@example.com', 'loginuser@example.com'] } },
     });
     await app.close();
   });
@@ -80,32 +91,32 @@ describe('AuthController (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({
-          email: 'test@example.com',
+          identifier: 'loginuser@example.com',
           password: 'wrongpassword',
         })
         .expect(401);
     });
 
-    it('should fail with nonexistent email', async () => {
+    it('should fail with nonexistent identifier', async () => {
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({
-          email: 'doesnotexist@example.com',
+          identifier: 'doesnotexist@example.com',
           password: 'password123',
         })
         .expect(401);
     });
 
-    it('should login successfully and set cookie', async () => {
+    it('should login successfully with email and set cookie', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({
-          email: 'test@example.com',
+          identifier: 'loginuser@example.com',
           password: 'password123',
         })
         .expect(200);
 
-      expect(res.body.email).toBe('test@example.com');
+      expect(res.body.email).toBe('loginuser@example.com');
       expect(res.body.passwordHash).toBeUndefined();
 
       const cookies = res.headers['set-cookie'];
@@ -113,6 +124,42 @@ describe('AuthController (e2e)', () => {
       expect(cookies[0]).toContain('studysync_session=');
 
       sessionCookie = cookies[0].split(';')[0];
+    });
+
+    it('should login successfully with username', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          identifier: 'LoginUser123',
+          password: 'password123',
+        })
+        .expect(200);
+
+      expect(res.body.username).toBe('LoginUser123');
+    });
+
+    it('should login successfully with different capitalization of username', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          identifier: 'loginuser123', // Lowercase
+          password: 'password123',
+        })
+        .expect(200);
+
+      expect(res.body.username).toBe('LoginUser123');
+    });
+
+    it('should login successfully with different capitalization of email', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          identifier: 'LOGINUSER@EXAMPLE.COM', // Uppercase
+          password: 'password123',
+        })
+        .expect(200);
+
+      expect(res.body.email).toBe('loginuser@example.com');
     });
   });
 
@@ -129,7 +176,7 @@ describe('AuthController (e2e)', () => {
         .set('Cookie', sessionCookie)
         .expect(200);
 
-      expect(res.body.email).toBe('test@example.com');
+      expect(res.body.email).toBe('loginuser@example.com');
       expect(res.body.passwordHash).toBeUndefined();
     });
   });

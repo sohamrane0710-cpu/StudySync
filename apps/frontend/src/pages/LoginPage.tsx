@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { Link, useNavigate } from 'react-router-dom';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { refreshUser } = useAuth();
@@ -18,7 +18,7 @@ export function LoginPage() {
     try {
       await fetchApi('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       });
       await refreshUser();
       // Routing logic handled by app-level guards, but we can navigate to trigger it
@@ -34,10 +34,10 @@ export function LoginPage() {
       {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
       <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', maxWidth: '300px', gap: '1rem' }}>
         <input 
-          type="email" 
-          placeholder="Email" 
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text" 
+          placeholder="Username or Email" 
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
         />
         <input 
