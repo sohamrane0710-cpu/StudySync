@@ -8,6 +8,7 @@ import { OnboardingPage } from './pages/OnboardingPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { RoomsPage } from './pages/RoomsPage.js';
+import { StudyRoomPage } from './pages/StudyRoomPage.js';
 import { CommunitiesPage } from './pages/CommunitiesPage.js';
 import { AnalyticsPage } from './pages/AnalyticsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
@@ -66,6 +67,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/rooms" element={<RoomsPage />} />
+        <Route path="/rooms/:roomId" element={<StudyRoomPage />} />
         <Route path="/communities" element={<CommunitiesPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
