@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Users, BookOpen, BarChart3, UserCircle, LogOut } from 'lucide-react';
+import { Home, Users, BookOpen, BarChart3, UserCircle, LogOut, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 import { fetchApi } from '../api.js';
 
@@ -19,6 +19,7 @@ export function Sidebar() {
 
   const navItems = [
     { name: 'Dashboard', to: '/dashboard', icon: Home },
+    { name: 'Timer', to: '/timer', icon: Clock },
     { name: 'Study Rooms', to: '/rooms', icon: BookOpen },
     { name: 'Communities', to: '/communities', icon: Users },
     { name: 'Analytics', to: '/analytics', icon: BarChart3 },

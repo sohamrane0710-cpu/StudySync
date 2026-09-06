@@ -42,6 +42,27 @@ export class TimerService {
     return mode;
   }
 
+  async getActiveTimerSession(userId: string) {
+    const sessions = await this.prisma.timerSession.findMany({
+      where: {
+        userId,
+        roomId: null,
+        status: {
+          in: [TimerStatus.PENDING, TimerStatus.RUNNING, TimerStatus.PAUSED],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+      include: { timerMode: true },
+    });
+    
+    if (sessions.length === 0) {
+      throw new NotFoundException('No active timer session found');
+    }
+    
+    return sessions[0];
+  }
+
   async createTimerSession(userId: string, dto: CreateTimerSessionDto) {
     const mode = await this.getTimerMode(userId, dto.timerModeId);
 

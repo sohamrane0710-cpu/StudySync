@@ -275,6 +275,73 @@ describe('TimerController (e2e)', () => {
     });
   });
 
+  describe('/timer-sessions/active (GET)', () => {
+    let activeSessionId: string;
+    let completedSessionId: string;
+
+    beforeAll(async () => {
+      // Create a completed session
+      const createResponse1 = await request(app.getHttpServer())
+        .post('/timer-sessions')
+        .set('Cookie', cookie1)
+        .send({ timerModeId: timerModeId1 });
+      completedSessionId = createResponse1.body.id;
+      
+      await request(app.getHttpServer())
+        .post(`/timer-sessions/${completedSessionId}/start`)
+        .set('Cookie', cookie1);
+        
+      await request(app.getHttpServer())
+        .post(`/timer-sessions/${completedSessionId}/complete`)
+        .set('Cookie', cookie1);
+
+      // Create an active (running) session
+      const createResponse2 = await request(app.getHttpServer())
+        .post('/timer-sessions')
+        .set('Cookie', cookie1)
+        .send({ timerModeId: timerModeId1 });
+      activeSessionId = createResponse2.body.id;
+
+      await request(app.getHttpServer())
+        .post(`/timer-sessions/${activeSessionId}/start`)
+        .set('Cookie', cookie1);
+    });
+
+    it('should return the active timer session for user 1', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/timer-sessions/active')
+        .set('Cookie', cookie1)
+        .expect(200);
+
+      expect(response.body.id).toBe(activeSessionId);
+      expect(response.body.status).toBe('RUNNING');
+      expect(response.body.timerMode).toBeDefined();
+      expect(response.body.timerMode.id).toBe(timerModeId1);
+    });
+
+    it('should not return completed sessions', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/timer-sessions/active')
+        .set('Cookie', cookie1)
+        .expect(200);
+
+      expect(response.body.id).not.toBe(completedSessionId);
+    });
+
+    it('should return 404 for user 2 with no active session', () => {
+      return request(app.getHttpServer())
+        .get('/timer-sessions/active')
+        .set('Cookie', cookie2)
+        .expect(404);
+    });
+    
+    afterAll(async () => {
+       await request(app.getHttpServer())
+        .post(`/timer-sessions/${activeSessionId}/complete`)
+        .set('Cookie', cookie1);
+    });
+  });
+
   describe('Deterministic Timer Duration (Fake Timers)', () => {
     let testTimerModeId: string;
     let testTimerSessionId: string;

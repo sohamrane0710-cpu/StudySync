@@ -88,3 +88,75 @@ export async function leaveStudyRoom(roomId: string): Promise<{ success: boolean
     method: 'DELETE',
   });
 }
+
+// --- Timer Types & API ---
+
+export interface TimerStageConfig {
+  type: 'FOCUS' | 'SHORT_BREAK' | 'LONG_BREAK';
+  durationSeconds: number;
+}
+
+export interface TimerMode {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  loop: boolean;
+  stagesConfig: TimerStageConfig[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TimerSession {
+  id: string;
+  userId: string;
+  roomId: string | null;
+  timerModeId: string;
+  status: 'PENDING' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+  currentStageIndex: number;
+  startedAt: string | null;
+  targetEndTime: string | null;
+  pausedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  timerMode?: TimerMode;
+}
+
+export async function getTimerModes(): Promise<TimerMode[]> {
+  return fetchApi('/timer-modes');
+}
+
+export async function getActiveTimerSession(): Promise<TimerSession | null> {
+  try {
+    return await fetchApi('/timer-sessions/active');
+  } catch (e: any) {
+    if (e.message?.includes('Not Found') || e.message?.includes('No active timer session')) return null;
+    throw e;
+  }
+}
+
+export async function createTimerSession(timerModeId: string): Promise<TimerSession> {
+  return fetchApi('/timer-sessions', {
+    method: 'POST',
+    body: JSON.stringify({ timerModeId }),
+  });
+}
+
+export async function startTimerSession(sessionId: string): Promise<TimerSession> {
+  return fetchApi(`/timer-sessions/${sessionId}/start`, {
+    method: 'POST',
+  });
+}
+
+export async function pauseTimerSession(sessionId: string): Promise<TimerSession> {
+  return fetchApi(`/timer-sessions/${sessionId}/pause`, {
+    method: 'POST',
+  });
+}
+
+export async function completeTimerSession(sessionId: string): Promise<TimerSession> {
+  return fetchApi(`/timer-sessions/${sessionId}/complete`, {
+    method: 'POST',
+  });
+}

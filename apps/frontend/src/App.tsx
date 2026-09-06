@@ -12,6 +12,7 @@ import { StudyRoomPage } from './pages/StudyRoomPage.js';
 import { CommunitiesPage } from './pages/CommunitiesPage.js';
 import { AnalyticsPage } from './pages/AnalyticsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { TimerPage } from './pages/TimerPage.js';
 import { AuthShell } from './layouts/AuthShell.js';
 
 function ProtectedRoute({ children, requireOnboarded }: { children: React.ReactNode, requireOnboarded: boolean }) {
@@ -65,6 +66,7 @@ function AppRoutes() {
       {/* Authenticated Shell Routes */}
       <Route element={<ProtectedRoute requireOnboarded={true}><AuthShell /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/timer" element={<TimerPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/rooms" element={<RoomsPage />} />
         <Route path="/rooms/:roomId" element={<StudyRoomPage />} />

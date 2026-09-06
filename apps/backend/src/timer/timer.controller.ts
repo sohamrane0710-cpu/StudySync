@@ -26,6 +26,11 @@ export class TimerController {
     return this.timerService.getTimerMode(user.id, id);
   }
 
+  @Get('timer-sessions/active')
+  getActiveTimerSession(@CurrentUser() user: any) {
+    return this.timerService.getActiveTimerSession(user.id);
+  }
+
   @Post('timer-sessions')
   createTimerSession(@CurrentUser() user: any, @Body() dto: CreateTimerSessionDto) {
     return this.timerService.createTimerSession(user.id, dto);
