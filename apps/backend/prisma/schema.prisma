@@ -25,7 +25,17 @@ enum GroupVisibility {
   PRIVATE
 }
 
+enum RoomVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum GroupRole {
+  OWNER
+  MEMBER
+}
+
+enum RoomRole {
   OWNER
   MEMBER
 }
@@ -39,7 +49,7 @@ enum InviteStatus {
 // MODELS
 
 model User {
-  id          String   @id @default(uuid()) @db.Uuid
+  id                  String   @id @default(uuid()) @db.Uuid
   username            String?  @unique @db.Citext
   email               String   @unique @db.Citext
   displayName         String?
@@ -47,7 +57,7 @@ model User {
   bio                 String?
   onboardingCompleted Boolean  @default(false)
   createdAt           DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt           DateTime @updatedAt
 
   // Relationships
   credential         Credential?
@@ -165,11 +175,13 @@ model Label {
 }
 
 model StudyRoom {
-  id          String   @id @default(uuid()) @db.Uuid
+  id          String         @id @default(uuid()) @db.Uuid
   name        String
-  createdById String   @db.Uuid
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description String?
+  visibility  RoomVisibility @default(PUBLIC)
+  createdById String         @db.Uuid
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
   roomMembers RoomMember[]
@@ -180,6 +192,7 @@ model StudyRoom {
 model RoomMember {
   roomId   String   @db.Uuid
   userId   String   @db.Uuid
+  role     RoomRole @default(MEMBER)
   joinedAt DateTime @default(now())
 
   room StudyRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
@@ -273,13 +286,13 @@ model Credential {
 }
 
 model Session {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
-  tokenHash    String   @unique
-  expiresAt    DateTime
-  lastUsedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
