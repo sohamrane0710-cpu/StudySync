@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { startTimerSession, pauseTimerSession, completeTimerSession } from '../../api.js';
+import { startTimerSession, pauseTimerSession, completeTimerSession, nextStageTimerSession } from '../../api.js';
 import type { TimerSession } from '../../api.js';
 
 interface TimerInterfaceProps {
@@ -12,7 +12,7 @@ export function TimerInterface({ session, onSessionUpdated }: TimerInterfaceProp
   const [isCompleting, setIsCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const stage = session.timerMode?.stagesConfig[session.currentStageIndex];
+  const stage = session.timerMode?.stagesConfig[session.currentStageIndex % session.timerMode.stagesConfig.length];
   
   // Calculate remaining seconds authoritatively from the backend state
   const calculateRemaining = () => {
@@ -50,9 +50,9 @@ export function TimerInterface({ session, onSessionUpdated }: TimerInterfaceProp
         const remaining = calculateRemaining();
         setRemainingSeconds(remaining);
         
-        // Safety completion request if we hit 0 and haven't tried completing yet
+        // Automatically advance to the next stage when we hit 0
         if (remaining <= 0 && !isCompleting) {
-          handleComplete();
+          handleNextStage();
         }
       }, 1000);
     }
@@ -91,6 +91,20 @@ export function TimerInterface({ session, onSessionUpdated }: TimerInterfaceProp
       onSessionUpdated({ ...updated, timerMode: session.timerMode });
     } catch (err: any) {
       setError(err.message || 'Failed to complete timer');
+      setIsCompleting(false);
+    }
+  };
+
+  const handleNextStage = async () => {
+    if (isCompleting) return;
+    try {
+      setIsCompleting(true);
+      setError(null);
+      const updated = await nextStageTimerSession(session.id);
+      onSessionUpdated({ ...updated, timerMode: session.timerMode });
+    } catch (err: any) {
+      setError(err.message || 'Failed to advance to next stage');
+    } finally {
       setIsCompleting(false);
     }
   };

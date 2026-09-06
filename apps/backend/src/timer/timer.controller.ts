@@ -1,6 +1,7 @@
-import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { TimerService } from './timer.service.js';
 import { CreateTimerModeDto } from './dto/create-timer-mode.dto.js';
+import { UpdateTimerModeDto } from './dto/update-timer-mode.dto.js';
 import { CreateTimerSessionDto } from './dto/create-timer-session.dto.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -26,6 +27,16 @@ export class TimerController {
     return this.timerService.getTimerMode(user.id, id);
   }
 
+  @Patch('timer-modes/:id')
+  updateTimerMode(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateTimerModeDto) {
+    return this.timerService.updateTimerMode(user.id, id, dto);
+  }
+
+  @Delete('timer-modes/:id')
+  deleteTimerMode(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.timerService.deleteTimerMode(user.id, id);
+  }
+
   @Get('timer-sessions/active')
   getActiveTimerSession(@CurrentUser() user: any) {
     return this.timerService.getActiveTimerSession(user.id);
@@ -44,6 +55,11 @@ export class TimerController {
   @Post('timer-sessions/:id/pause')
   pauseTimerSession(@CurrentUser() user: any, @Param('id') id: string) {
     return this.timerService.pauseTimerSession(user.id, id);
+  }
+
+  @Post('timer-sessions/:id/next-stage')
+  nextStageTimerSession(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.timerService.nextStageTimerSession(user.id, id);
   }
 
   @Post('timer-sessions/:id/complete')

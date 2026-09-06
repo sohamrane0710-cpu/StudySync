@@ -127,6 +127,26 @@ export async function getTimerModes(): Promise<TimerMode[]> {
   return fetchApi('/timer-modes');
 }
 
+export async function createTimerMode(data: Partial<TimerMode>): Promise<TimerMode> {
+  return fetchApi('/timer-modes', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateTimerMode(id: string, data: Partial<TimerMode>): Promise<TimerMode> {
+  return fetchApi(`/timer-modes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteTimerMode(id: string): Promise<{ success: boolean }> {
+  return fetchApi(`/timer-modes/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getActiveTimerSession(): Promise<TimerSession | null> {
   try {
     return await fetchApi('/timer-sessions/active');
@@ -150,9 +170,11 @@ export async function startTimerSession(sessionId: string): Promise<TimerSession
 }
 
 export async function pauseTimerSession(sessionId: string): Promise<TimerSession> {
-  return fetchApi(`/timer-sessions/${sessionId}/pause`, {
-    method: 'POST',
-  });
+  return fetchApi(`/timer-sessions/${sessionId}/pause`, { method: 'POST' });
+}
+
+export async function nextStageTimerSession(sessionId: string): Promise<TimerSession> {
+  return fetchApi(`/timer-sessions/${sessionId}/next-stage`, { method: 'POST' });
 }
 
 export async function completeTimerSession(sessionId: string): Promise<TimerSession> {
