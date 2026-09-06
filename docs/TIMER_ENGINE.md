@@ -26,6 +26,28 @@ Path: `User -> TimerSession -> StudySession`
 
 The user enters a timer, studies, and records an activity. They are not required to be part of any Study Room or group.
 
+### Personal Timer Lifecycle
+```text
+TimerMode
+   ↓ (Create TimerSession)
+PENDING
+   ↓ (Start)
+RUNNING
+   ↓↑ (Pause / Resume)
+PAUSED ↔ RUNNING
+   ↓ (Complete)
+COMPLETED
+   ↓ (Automatic Transaction)
+StudySession
+```
+
+### Timestamp and Execution Rules
+- **Backend Timestamps are Authoritative**: The timer relies entirely on backend `Date` records. It never trusts a client-provided duration.
+- **Start**: Sets `startedAt = now` and calculates a `targetEndTime = now + currentStageDuration`.
+- **Pause**: Sets `pausedAt = now`.
+- **Resume**: Calculates the remaining time (`targetEndTime - pausedAt`), clears `pausedAt`, and pushes the new `targetEndTime` into the future by the remaining time. The original `startedAt` remains intact.
+- **Completion**: When complete, the true elapsed focus time is calculated by determining the actual duration spent in `RUNNING`. A historical `StudySession` is strictly generated exactly once per completion, wrapping the status update and the creation into a single Prisma transaction to prevent duplication.
+
 ## Shared Room Timers
 
 Study Rooms contain one shared, authoritative timer state.
