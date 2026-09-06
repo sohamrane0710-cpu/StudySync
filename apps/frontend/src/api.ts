@@ -36,3 +36,55 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     return null;
   }
 }
+
+// --- Study Room Types & API ---
+
+export interface UserBasic {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+export interface StudyRoom {
+  id: string;
+  name: string;
+  description: string | null;
+  visibility: 'PUBLIC' | 'PRIVATE';
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: UserBasic;
+  _count?: {
+    roomMembers: number;
+  };
+  currentUserMembership?: {
+    role: 'OWNER' | 'MEMBER';
+  } | null;
+}
+
+export async function getStudyRooms(): Promise<StudyRoom[]> {
+  return fetchApi('/study-rooms');
+}
+
+export async function getStudyRoom(roomId: string): Promise<StudyRoom> {
+  return fetchApi(`/study-rooms/${roomId}`);
+}
+
+export async function createStudyRoom(data: { name: string; description?: string; visibility: 'PUBLIC' | 'PRIVATE' }): Promise<StudyRoom> {
+  return fetchApi('/study-rooms', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function joinStudyRoom(roomId: string): Promise<{ roomId: string; userId: string; role: 'OWNER' | 'MEMBER' }> {
+  return fetchApi(`/study-rooms/${roomId}/join`, {
+    method: 'POST',
+  });
+}
+
+export async function leaveStudyRoom(roomId: string): Promise<{ success: boolean }> {
+  return fetchApi(`/study-rooms/${roomId}/membership`, {
+    method: 'DELETE',
+  });
+}

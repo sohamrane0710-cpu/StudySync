@@ -80,7 +80,12 @@ export class StudyRoomService {
     }
 
     const { roomMembers, ...safeRoom } = room;
-    return safeRoom;
+    const currentUserMembership = isMember ? { role: roomMembers[0].role } : null;
+
+    return {
+      ...safeRoom,
+      currentUserMembership,
+    };
   }
 
   async joinRoom(userId: string, roomId: string) {
