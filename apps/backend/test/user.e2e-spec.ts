@@ -161,4 +161,120 @@ describe('UserController (e2e)', () => {
         .expect(409);
     });
   });
+
+  describe('GET /users/profile', () => {
+    it('should fail without authentication', async () => {
+      await request(app.getHttpServer())
+        .get('/users/profile')
+        .expect(401);
+    });
+
+    it('should succeed with valid session cookie and return safe fields', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/users/profile')
+        .set('Cookie', sessionCookie)
+        .expect(200);
+
+      expect(res.body).toHaveProperty('id');
+      expect(res.body).toHaveProperty('email');
+      expect(res.body).toHaveProperty('username');
+      expect(res.body).toHaveProperty('onboardingCompleted');
+      expect(res.body.passwordHash).toBeUndefined();
+      expect(res.body.credential).toBeUndefined();
+      expect(res.body.sessions).toBeUndefined();
+    });
+  });
+
+  describe('PATCH /users/profile', () => {
+    it('should fail without authentication', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/profile')
+        .send({ displayName: 'New Name' })
+        .expect(401);
+    });
+
+    it('should update display name', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ displayName: 'Updated Name' })
+        .expect(200);
+
+      expect(res.body.displayName).toBe('Updated Name');
+      expect(res.body.passwordHash).toBeUndefined();
+    });
+
+    it('should update bio', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ bio: 'This is my new bio.' })
+        .expect(200);
+
+      expect(res.body.bio).toBe('This is my new bio.');
+    });
+
+    it('should update avatar URL', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ avatarUrl: 'https://example.com/avatar.jpg' })
+        .expect(200);
+
+      expect(res.body.avatarUrl).toBe('https://example.com/avatar.jpg');
+    });
+
+    it('should update username', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ username: 'new_success_user' })
+        .expect(200);
+
+      expect(res.body.username).toBe('new_success_user');
+    });
+
+    it('should fail if username is taken (case-insensitive)', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ username: 'TAKEN_user' }) // existing user
+        .expect(409);
+    });
+
+    it('should allow updating own username with different capitalization', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ username: 'NEW_SUCCESS_USER' }) // own username capitalized
+        .expect(200);
+
+      expect(res.body.username).toBe('NEW_SUCCESS_USER');
+    });
+
+    it('should reject invalid username', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ username: 'bad user!' })
+        .expect(400);
+    });
+
+    it('should reject bio over 500 characters', async () => {
+      const longBio = 'a'.repeat(501);
+      await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ bio: longBio })
+        .expect(400);
+    });
+
+    it('should reject invalid avatar URL', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/profile')
+        .set('Cookie', sessionCookie)
+        .send({ avatarUrl: 'not-a-url' })
+        .expect(400);
+    });
+  });
 });

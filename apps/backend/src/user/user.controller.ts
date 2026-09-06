@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service.js';
 import { CompleteOnboardingDto } from './dto/complete-onboarding.dto.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { User } from '@prisma/client';
@@ -22,5 +23,20 @@ export class UserController {
     @Body() dto: CompleteOnboardingDto,
   ) {
     return this.userService.completeOnboarding(user.id, dto);
+  }
+
+  @Get('profile')
+  @UseGuards(AuthGuard)
+  async getProfile(@CurrentUser() user: User) {
+    return this.userService.getProfile(user.id);
+  }
+
+  @Patch('profile')
+  @UseGuards(AuthGuard)
+  async updateProfile(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.userService.updateProfile(user.id, dto);
   }
 }

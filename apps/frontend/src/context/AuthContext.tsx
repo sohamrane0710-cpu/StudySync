@@ -7,6 +7,7 @@ export interface User {
   email: string;
   username: string | null;
   displayName: string | null;
+  bio: string | null;
   avatarUrl: string | null;
   onboardingCompleted: boolean;
 }

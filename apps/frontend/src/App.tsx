@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
+import { ProfilePage } from './pages/ProfilePage.js';
 
 function ProtectedRoute({ children, requireOnboarded }: { children: React.ReactNode, requireOnboarded: boolean }) {
   const { user, loading } = useAuth();
@@ -47,6 +48,7 @@ function AppRoutes() {
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
       <Route path="/onboarding" element={<ProtectedRoute requireOnboarded={false}><OnboardingPage /></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute requireOnboarded={true}><DashboardPage /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute requireOnboarded={true}><ProfilePage /></ProtectedRoute>} />
     </Routes>
   );
 }
