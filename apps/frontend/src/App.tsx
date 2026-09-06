@@ -7,11 +7,20 @@ import { RegisterPage } from './pages/RegisterPage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
+import { RoomsPage } from './pages/RoomsPage.js';
+import { CommunitiesPage } from './pages/CommunitiesPage.js';
+import { AnalyticsPage } from './pages/AnalyticsPage.js';
+import { SettingsPage } from './pages/SettingsPage.js';
+import { AuthShell } from './layouts/AuthShell.js';
 
 function ProtectedRoute({ children, requireOnboarded }: { children: React.ReactNode, requireOnboarded: boolean }) {
   const { user, loading } = useAuth();
   
-  if (loading) return <div>Loading...</div>;
+  if (loading) return (
+    <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+      <div className="text-slate-500 font-medium">Loading...</div>
+    </div>
+  );
   if (!user) return <Navigate to="/login" replace />;
 
   if (requireOnboarded && !user.onboardingCompleted) {
@@ -28,7 +37,11 @@ function ProtectedRoute({ children, requireOnboarded }: { children: React.ReactN
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   
-  if (loading) return <div>Loading...</div>;
+  if (loading) return (
+    <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+      <div className="text-slate-500 font-medium">Loading...</div>
+    </div>
+  );
   if (user) {
     if (user.onboardingCompleted) {
       return <Navigate to="/dashboard" replace />;
@@ -47,8 +60,16 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
       <Route path="/onboarding" element={<ProtectedRoute requireOnboarded={false}><OnboardingPage /></ProtectedRoute>} />
-      <Route path="/dashboard" element={<ProtectedRoute requireOnboarded={true}><DashboardPage /></ProtectedRoute>} />
-      <Route path="/profile" element={<ProtectedRoute requireOnboarded={true}><ProfilePage /></ProtectedRoute>} />
+      
+      {/* Authenticated Shell Routes */}
+      <Route element={<ProtectedRoute requireOnboarded={true}><AuthShell /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/rooms" element={<RoomsPage />} />
+        <Route path="/communities" element={<CommunitiesPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
     </Routes>
   );
 }
