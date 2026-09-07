@@ -1,33 +1,37 @@
 import { useState } from 'react';
-import type { TimerMode, TimerStageConfig } from '../../api.js';
+import type { TimerMode, TimerStageConfig, TimerCategory } from '../../api.js';
 import { Plus, Trash2, X } from 'lucide-react';
 
 interface TimerModeFormProps {
   initialData?: TimerMode;
+  categories: TimerCategory[];
   onSubmit: (data: Partial<TimerMode>) => Promise<void>;
   onCancel: () => void;
 }
 
-export function TimerModeForm({ initialData, onSubmit, onCancel }: TimerModeFormProps) {
+export function TimerModeForm({ initialData, categories, onSubmit, onCancel }: TimerModeFormProps) {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [loop, setLoop] = useState(initialData?.loop ?? false);
   
+  const defaultFocusCategory = categories.find(c => c.name === 'Focus')?.id || categories[0]?.id || '';
+  const defaultRestCategory = categories.find(c => c.name === 'Rest')?.id || categories[0]?.id || '';
+
   // Convert backend durationSeconds back to minutes for the UI
-  const [stagesConfig, setStagesConfig] = useState<{ type: string; durationMinutes: string }[]>(
+  const [stagesConfig, setStagesConfig] = useState<{ categoryId: string; durationMinutes: string }[]>(
     initialData?.stagesConfig 
       ? initialData.stagesConfig.map(s => ({
-          type: s.type,
+          categoryId: s.categoryId,
           durationMinutes: Math.floor(s.durationSeconds / 60).toString()
         }))
-      : [{ type: 'FOCUS', durationMinutes: '45' }, { type: 'SHORT_BREAK', durationMinutes: '15' }]
+      : [{ categoryId: defaultFocusCategory, durationMinutes: '45' }, { categoryId: defaultRestCategory, durationMinutes: '15' }]
   );
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddStage = () => {
-    setStagesConfig([...stagesConfig, { type: 'FOCUS', durationMinutes: '45' }]);
+    setStagesConfig([...stagesConfig, { categoryId: defaultFocusCategory, durationMinutes: '45' }]);
   };
 
   const handleRemoveStage = (index: number) => {
@@ -37,7 +41,7 @@ export function TimerModeForm({ initialData, onSubmit, onCancel }: TimerModeForm
     setStagesConfig(newStages);
   };
 
-  const handleStageChange = (index: number, field: 'type' | 'durationMinutes', value: string) => {
+  const handleStageChange = (index: number, field: 'categoryId' | 'durationMinutes', value: string) => {
     const newStages = [...stagesConfig];
     newStages[index][field] = value;
     setStagesConfig(newStages);
@@ -69,7 +73,7 @@ export function TimerModeForm({ initialData, onSubmit, onCancel }: TimerModeForm
       }
 
       processedStages.push({
-        type: stage.type as any,
+        categoryId: stage.categoryId,
         durationSeconds: mins * 60,
       });
     }
@@ -165,13 +169,13 @@ export function TimerModeForm({ initialData, onSubmit, onCancel }: TimerModeForm
                     
                     <div className="flex-1">
                       <select
-                        value={stage.type}
-                        onChange={e => handleStageChange(idx, 'type', e.target.value)}
+                        value={stage.categoryId}
+                        onChange={e => handleStageChange(idx, 'categoryId', e.target.value)}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                       >
-                        <option value="FOCUS">Focus</option>
-                        <option value="SHORT_BREAK">Short Break</option>
-                        <option value="LONG_BREAK">Long Break</option>
+                        {categories.map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
                       </select>
                     </div>
 

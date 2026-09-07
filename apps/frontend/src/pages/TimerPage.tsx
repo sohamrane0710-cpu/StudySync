@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getActiveTimerSession, getTimerModes, createTimerSession, createTimerMode, updateTimerMode, deleteTimerMode } from '../api.js';
-import type { TimerSession, TimerMode } from '../api.js';
+import { getActiveTimerSession, getTimerModes, createTimerSession, createTimerMode, updateTimerMode, deleteTimerMode, getTimerCategories } from '../api.js';
+import type { TimerSession, TimerMode, TimerCategory } from '../api.js';
 import { TimerInterface } from '../components/timer/TimerInterface.js';
 import { TimerModeForm } from '../components/timer/TimerModeForm.js';
 import { Play, Plus, Edit2, Trash2 } from 'lucide-react';
@@ -8,6 +8,7 @@ import { Play, Plus, Edit2, Trash2 } from 'lucide-react';
 export function TimerPage() {
   const [activeSession, setActiveSession] = useState<TimerSession | null>(null);
   const [modes, setModes] = useState<TimerMode[]>([]);
+  const [categories, setCategories] = useState<TimerCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -24,6 +25,9 @@ export function TimerPage() {
       setError(null);
       
       const session = await getActiveTimerSession();
+      const loadedCategories = await getTimerCategories();
+      setCategories(loadedCategories);
+      
       if (session) {
         setActiveSession(session);
       } else {
@@ -130,6 +134,7 @@ export function TimerPage() {
       {activeSession ? (
         <TimerInterface 
           session={activeSession} 
+          categories={categories}
           onSessionUpdated={handleSessionUpdated} 
         />
       ) : (
@@ -199,6 +204,7 @@ export function TimerPage() {
       {isFormOpen && (
         <TimerModeForm
           initialData={editingMode}
+          categories={categories}
           onSubmit={handleFormSubmit}
           onCancel={() => setIsFormOpen(false)}
         />

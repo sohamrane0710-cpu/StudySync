@@ -6,9 +6,10 @@ import { AuthModule } from './auth/auth.module.js';
 import { UserModule } from './user/user.module.js';
 import { StudyRoomModule } from './study-room/study-room.module.js';
 import { TimerModule } from './timer/timer.module.js';
+import { TimerCategoryModule } from './timer-category/timer-category.module.js';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UserModule, StudyRoomModule, TimerModule],
+  imports: [PrismaModule, AuthModule, UserModule, StudyRoomModule, TimerModule, TimerCategoryModule],
   controllers: [AppController],
   providers: [AppService],
 })

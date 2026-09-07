@@ -91,8 +91,40 @@ export async function leaveStudyRoom(roomId: string): Promise<{ success: boolean
 
 // --- Timer Types & API ---
 
+export interface TimerCategory {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getTimerCategories(): Promise<TimerCategory[]> {
+  return fetchApi('/timer-categories');
+}
+
+export async function createTimerCategory(data: { name: string }): Promise<TimerCategory> {
+  return fetchApi('/timer-categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateTimerCategory(id: string, data: { name: string }): Promise<TimerCategory> {
+  return fetchApi(`/timer-categories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteTimerCategory(id: string): Promise<{ success: boolean }> {
+  return fetchApi(`/timer-categories/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export interface TimerStageConfig {
-  type: 'FOCUS' | 'SHORT_BREAK' | 'LONG_BREAK';
+  categoryId: string;
   durationSeconds: number;
 }
 

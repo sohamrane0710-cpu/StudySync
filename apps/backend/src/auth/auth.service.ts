@@ -36,6 +36,12 @@ export class AuthService {
             passwordHash,
           },
         },
+        timerCategories: {
+          create: [
+            { name: 'Focus' },
+            { name: 'Rest' }
+          ]
+        },
       },
       select: {
         id: true,

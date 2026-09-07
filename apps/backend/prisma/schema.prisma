@@ -64,6 +64,7 @@ model User {
   sessions           Session[]
   accounts           Account[]
   timerModes         TimerMode[]
+  timerCategories    TimerCategory[]
   timerSessions      TimerSession[]
   studySessions      StudySession[]
   dailyTargets       DailyTarget[]
@@ -105,6 +106,21 @@ model TimerMode {
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   timerSessions TimerSession[]
 
+  @@index([userId])
+}
+
+model TimerCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  name        String   @db.Citext
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studySessionCategories StudySessionCategory[]
+
+  @@unique([userId, name])
   @@index([userId])
 }
 
@@ -164,9 +180,25 @@ model StudySession {
   labels               Label[]
   groupContributions   StudySessionGroupContribution[]
   labelGroupSelections StudySessionLabelGroupSelection[]
+  studySessionCategories StudySessionCategory[]
 
   @@index([userId])
   @@index([timerSessionId])
+}
+
+model StudySessionCategory {
+  id              String   @id @default(uuid()) @db.Uuid
+  studySessionId  String   @db.Uuid
+  categoryId      String   @db.Uuid
+  durationSeconds Int
+  createdAt       DateTime @default(now())
+
+  studySession    StudySession  @relation(fields: [studySessionId], references: [id], onDelete: Cascade)
+  category        TimerCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([studySessionId, categoryId])
+  @@index([studySessionId])
+  @@index([categoryId])
 }
 
 model DailyTarget {

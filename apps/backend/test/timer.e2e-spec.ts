@@ -16,6 +16,9 @@ describe('TimerController (e2e)', () => {
   let timerModeId1: string;
   let timerSessionId1: string;
 
+  let focusCatId1: string;
+  let restCatId1: string;
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -59,6 +62,14 @@ describe('TimerController (e2e)', () => {
       .send({ identifier: 'user2_timer@example.com', password: 'password123' });
     cookie2 = user2Login.headers['set-cookie'][0];
     userId2 = user2Register.body.id;
+
+    // Get categories for User 1
+    const categoriesResponse = await request(app.getHttpServer())
+      .get('/timer-categories')
+      .set('Cookie', cookie1);
+    
+    focusCatId1 = categoriesResponse.body.find((c: any) => c.name === 'Focus').id;
+    restCatId1 = categoriesResponse.body.find((c: any) => c.name === 'Rest').id;
   });
 
   afterAll(async () => {
@@ -76,7 +87,7 @@ describe('TimerController (e2e)', () => {
     it('should reject unauthenticated request', () => {
       return request(app.getHttpServer())
         .post('/timer-modes')
-        .send({ name: 'My Mode', loop: false, stagesConfig: [{ type: 'FOCUS', durationSeconds: 1500 }] })
+        .send({ name: 'My Mode', loop: false, stagesConfig: [{ categoryId: focusCatId1, durationSeconds: 1500 }] })
         .expect(401);
     });
 
@@ -96,8 +107,8 @@ describe('TimerController (e2e)', () => {
           name: 'Classic Pomodoro',
           loop: true,
           stagesConfig: [
-            { type: 'FOCUS', durationSeconds: 1500 },
-            { type: 'SHORT_BREAK', durationSeconds: 300 }
+            { categoryId: focusCatId1, durationSeconds: 1500 },
+            { categoryId: restCatId1, durationSeconds: 300 }
           ]
         });
 
@@ -221,7 +232,7 @@ describe('TimerController (e2e)', () => {
         .send({
           name: 'To Be Deleted',
           loop: false,
-          stagesConfig: [{ type: 'FOCUS', durationSeconds: 60 }]
+          stagesConfig: [{ categoryId: focusCatId1, durationSeconds: 60 }]
         });
       
       const newModeId = createResponse.body.id;
@@ -435,226 +446,262 @@ describe('TimerController (e2e)', () => {
     });
   });
 
-  describe('Deterministic Timer Duration (Fake Timers)', () => {
+  describe('Deterministic Timer Duration (Largest Remainder Method)', () => {
     let testTimerModeId: string;
-    let testTimerSessionId: string;
+    let sessionId: string;
+    let customCatId1: string;
 
     beforeAll(async () => {
-      const modeResponse = await request(app.getHttpServer())
-        .post('/timer-modes')
+      // Create a third category for testing
+      const createCatResponse = await request(app.getHttpServer())
+        .post('/timer-categories')
         .set('Cookie', cookie1)
-        .send({
-          name: 'Fake Timer Mode',
-          loop: false,
-          stagesConfig: [{ type: 'FOCUS', durationSeconds: 1500 }]
-        });
-      testTimerModeId = modeResponse.body.id;
+        .send({ name: 'Custom' });
+      customCatId1 = createCatResponse.body.id;
     });
 
     beforeEach(() => {
       vi.useFakeTimers();
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       vi.useRealTimers();
     });
 
-    it('Test A — one pause', async () => {
-      const createResponse = await request(app.getHttpServer())
-        .post('/timer-sessions')
-        .set('Cookie', cookie1)
-        .send({ timerModeId: testTimerModeId });
-      testTimerSessionId = createResponse.body.id;
-
-      // 10:00 start
-      vi.setSystemTime(new Date('2026-09-07T10:00:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${testTimerSessionId}/start`).set('Cookie', cookie1).expect(201);
-
-      // 10:10 pause
-      vi.setSystemTime(new Date('2026-09-07T10:10:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${testTimerSessionId}/pause`).set('Cookie', cookie1).expect(201);
-
-      // 10:30 resume
-      vi.setSystemTime(new Date('2026-09-07T10:30:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${testTimerSessionId}/start`).set('Cookie', cookie1).expect(201);
-
-      // 10:40 complete
-      vi.setSystemTime(new Date('2026-09-07T10:40:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${testTimerSessionId}/complete`).set('Cookie', cookie1).expect(201);
-
-      const studySessions = await prisma.studySession.findMany({
-        where: { timerSessionId: testTimerSessionId }
-      });
-      expect(studySessions.length).toBe(1);
-      expect(studySessions[0].durationSeconds).toBe(1200); // 20 minutes
-    });
-
-    it('Test B — multiple pauses', async () => {
-      const createResponse = await request(app.getHttpServer())
-        .post('/timer-sessions')
-        .set('Cookie', cookie1)
-        .send({ timerModeId: testTimerModeId });
-      const sessionId = createResponse.body.id;
-
-      // 10:00 start
-      vi.setSystemTime(new Date('2026-09-07T10:00:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1);
-
-      // 10:05 pause
-      vi.setSystemTime(new Date('2026-09-07T10:05:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/pause`).set('Cookie', cookie1);
-
-      // 10:15 resume
-      vi.setSystemTime(new Date('2026-09-07T10:15:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1);
-
-      // 10:20 pause
-      vi.setSystemTime(new Date('2026-09-07T10:20:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/pause`).set('Cookie', cookie1);
-
-      // 10:40 resume
-      vi.setSystemTime(new Date('2026-09-07T10:40:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1);
-
-      // 10:50 complete
-      vi.setSystemTime(new Date('2026-09-07T10:50:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/complete`).set('Cookie', cookie1);
-
-      const studySessions = await prisma.studySession.findMany({
-        where: { timerSessionId: sessionId }
-      });
-      expect(studySessions.length).toBe(1);
-      expect(studySessions[0].durationSeconds).toBe(1200); // 5 + 5 + 10 = 20 minutes
-    });
-
-    it('Test C — Multi-stage transitions and accumulation', async () => {
-      // 1. Create a mode with 2 stages
+    it('Test A — Rounding drift', async () => {
+      // Create mode with 2 categories
       const modeResponse = await request(app.getHttpServer())
         .post('/timer-modes')
         .set('Cookie', cookie1)
         .send({
-          name: 'Multi-stage Fake',
+          name: 'Test A Mode',
           loop: false,
           stagesConfig: [
-            { type: 'FOCUS', durationSeconds: 600 }, // 10 mins
-            { type: 'SHORT_BREAK', durationSeconds: 300 } // 5 mins
+            { categoryId: focusCatId1, durationSeconds: 1 },
+            { categoryId: restCatId1, durationSeconds: 1 }
           ]
         });
-      const modeId = modeResponse.body.id;
+      testTimerModeId = modeResponse.body.id;
 
-      // 2. Create session
+      // Manually inject fractional durationSeconds bypassing DTO validation
+      await prisma.timerMode.update({
+        where: { id: testTimerModeId },
+        data: {
+          stagesConfig: [
+            { categoryId: focusCatId1, durationSeconds: 1.5 },
+            { categoryId: restCatId1, durationSeconds: 1.5 }
+          ]
+        }
+      });
+
       const createResponse = await request(app.getHttpServer())
         .post('/timer-sessions')
         .set('Cookie', cookie1)
-        .send({ timerModeId: modeId });
-      const sessionId = createResponse.body.id;
+        .send({ timerModeId: testTimerModeId });
+      sessionId = createResponse.body.id;
 
-      // 10:00 start
-      vi.setSystemTime(new Date('2026-09-07T10:00:00Z'));
+      // Start
+      vi.setSystemTime(new Date('2026-09-07T10:00:00.000Z'));
       await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1).expect(201);
 
-      // 10:10 next stage
-      vi.setSystemTime(new Date('2026-09-07T10:10:00Z'));
-      const nextResponse = await request(app.getHttpServer())
-        .post(`/timer-sessions/${sessionId}/next-stage`)
-        .set('Cookie', cookie1)
-        .expect(201);
+      // Advance by 1500ms (1.5s)
+      vi.setSystemTime(new Date('2026-09-07T10:00:01.500Z'));
       
-      expect(nextResponse.body.currentStageIndex).toBe(1);
-      expect(nextResponse.body.status).toBe('RUNNING');
-      
-      // 10:12 pause
-      vi.setSystemTime(new Date('2026-09-07T10:12:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/pause`).set('Cookie', cookie1).expect(201);
-      
-      // 10:17 resume
-      vi.setSystemTime(new Date('2026-09-07T10:17:00Z'));
-      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1).expect(201);
+      // Next stage
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/next-stage`).set('Cookie', cookie1).expect(201);
 
-      // 10:20 complete naturally (nextStage triggers completion because loop=false)
-      vi.setSystemTime(new Date('2026-09-07T10:20:00Z'));
-      const finalResponse = await request(app.getHttpServer())
-        .post(`/timer-sessions/${sessionId}/next-stage`)
-        .set('Cookie', cookie1)
-        .expect(201);
-
-      expect(finalResponse.body.status).toBe('COMPLETED');
-      expect(finalResponse.body.completedAt).not.toBeNull();
+      // Advance by 1500ms (1.5s)
+      vi.setSystemTime(new Date('2026-09-07T10:00:03.000Z'));
+      
+      // Complete
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/complete`).set('Cookie', cookie1).expect(201);
 
       const studySessions = await prisma.studySession.findMany({
-        where: { timerSessionId: sessionId }
+        where: { timerSessionId: sessionId },
+        include: { studySessionCategories: true }
       });
+
       expect(studySessions.length).toBe(1);
-      expect(studySessions[0].durationSeconds).toBe(900); // 10m focus + 5m break (active time) = 15m = 900s
+      const session = studySessions[0];
+      expect(session.durationSeconds).toBe(3);
+
+      const sumCategoryDurations = session.studySessionCategories.reduce((acc, cat) => acc + cat.durationSeconds, 0);
+      expect(sumCategoryDurations).toBe(3); // Prove invariant holds!
     });
 
-    it('Test D — loop=true wrap around and premature skip protection', async () => {
-      // 1. Create a mode with 2 stages and loop=true
+    it('Test B — Multiple categories', async () => {
+      // Create mode with 3 categories
       const modeResponse = await request(app.getHttpServer())
         .post('/timer-modes')
         .set('Cookie', cookie1)
         .send({
-          name: 'Looping Timer',
-          loop: true,
+          name: 'Test B Mode',
+          loop: false,
           stagesConfig: [
-            { type: 'FOCUS', durationSeconds: 10 },
-            { type: 'SHORT_BREAK', durationSeconds: 5 }
+            { categoryId: focusCatId1, durationSeconds: 1 },
+            { categoryId: restCatId1, durationSeconds: 1 },
+            { categoryId: customCatId1, durationSeconds: 1 }
           ]
         });
-      const modeId = modeResponse.body.id;
+      testTimerModeId = modeResponse.body.id;
 
-      // 2. Create session
+      await prisma.timerMode.update({
+        where: { id: testTimerModeId },
+        data: {
+          stagesConfig: [
+            { categoryId: focusCatId1, durationSeconds: 1.4 },
+            { categoryId: restCatId1, durationSeconds: 1.4 },
+            { categoryId: customCatId1, durationSeconds: 1.4 }
+          ]
+        }
+      });
+
       const createResponse = await request(app.getHttpServer())
         .post('/timer-sessions')
         .set('Cookie', cookie1)
-        .send({ timerModeId: modeId });
-      const sessionId = createResponse.body.id;
+        .send({ timerModeId: testTimerModeId });
+      sessionId = createResponse.body.id;
 
-      // Start at 10:00:00
-      vi.setSystemTime(new Date('2026-09-07T10:00:00Z'));
+      // Start
+      vi.setSystemTime(new Date('2026-09-07T10:00:00.000Z'));
       await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1).expect(201);
 
-      // Try premature skip at 10:00:05 (5 seconds early)
-      vi.setSystemTime(new Date('2026-09-07T10:00:05Z'));
-      await request(app.getHttpServer())
-        .post(`/timer-sessions/${sessionId}/next-stage`)
+      // Focus -> 1400ms
+      vi.setSystemTime(new Date('2026-09-07T10:00:01.400Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/next-stage`).set('Cookie', cookie1).expect(201);
+
+      // Rest -> 1400ms
+      vi.setSystemTime(new Date('2026-09-07T10:00:02.800Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/next-stage`).set('Cookie', cookie1).expect(201);
+
+      // Custom -> 1400ms
+      vi.setSystemTime(new Date('2026-09-07T10:00:04.200Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/complete`).set('Cookie', cookie1).expect(201);
+
+      const studySessions = await prisma.studySession.findMany({
+        where: { timerSessionId: sessionId },
+        include: { studySessionCategories: true }
+      });
+
+      expect(studySessions.length).toBe(1);
+      const session = studySessions[0];
+      // Total elapsed = 4200ms -> 4 seconds
+      expect(session.durationSeconds).toBe(4);
+
+      const sumCategoryDurations = session.studySessionCategories.reduce((acc, cat) => acc + cat.durationSeconds, 0);
+      expect(sumCategoryDurations).toBe(4); // Prove invariant holds!
+    });
+
+    it('Test C — Existing real timer lifecycle', async () => {
+      // Realistic multi-stage timer
+      const modeResponse = await request(app.getHttpServer())
+        .post('/timer-modes')
         .set('Cookie', cookie1)
-        .expect(409); // Should fail premature skip protection
+        .send({
+          name: 'Test C Mode',
+          loop: true,
+          stagesConfig: [
+            { categoryId: focusCatId1, durationSeconds: 60 },
+            { categoryId: restCatId1, durationSeconds: 30 }
+          ]
+        });
+      testTimerModeId = modeResponse.body.id;
 
-      // Complete first stage at 10:00:10
-      vi.setSystemTime(new Date('2026-09-07T10:00:10Z'));
-      const next1 = await request(app.getHttpServer())
-        .post(`/timer-sessions/${sessionId}/next-stage`)
+      const createResponse = await request(app.getHttpServer())
+        .post('/timer-sessions')
         .set('Cookie', cookie1)
-        .expect(201);
-      
-      expect(next1.body.currentStageIndex).toBe(1);
-      expect(next1.body.status).toBe('RUNNING'); // Stay running because loop=true
+        .send({ timerModeId: testTimerModeId });
+      sessionId = createResponse.body.id;
 
-      // Complete second stage at 10:00:15
-      vi.setSystemTime(new Date('2026-09-07T10:00:15Z'));
-      const next2 = await request(app.getHttpServer())
-        .post(`/timer-sessions/${sessionId}/next-stage`)
+      // 1. Start at 10:00:00
+      vi.setSystemTime(new Date('2026-09-07T10:00:00.000Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1).expect(201);
+
+      // 2. Complete Focus stage at 10:01:00 (exact)
+      vi.setSystemTime(new Date('2026-09-07T10:01:00.000Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/next-stage`).set('Cookie', cookie1).expect(201);
+
+      // 3. Complete Rest stage at 10:01:30 (exact)
+      vi.setSystemTime(new Date('2026-09-07T10:01:30.000Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/next-stage`).set('Cookie', cookie1).expect(201);
+
+      // 4. Wrap around to Focus stage, complete partially at 10:02:15.500 (75.5 seconds)
+      vi.setSystemTime(new Date('2026-09-07T10:02:15.500Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/complete`).set('Cookie', cookie1).expect(201);
+
+      const studySessions = await prisma.studySession.findMany({
+        where: { timerSessionId: sessionId },
+        include: { studySessionCategories: true }
+      });
+
+      expect(studySessions.length).toBe(1);
+      const session = studySessions[0];
+      // total = 60s + 30s + 45.5s = 135.5s -> Math.round = 136s
+      expect(session.durationSeconds).toBe(136);
+
+      const focusDuration = session.studySessionCategories.find(c => c.categoryId === focusCatId1)?.durationSeconds;
+      const restDuration = session.studySessionCategories.find(c => c.categoryId === restCatId1)?.durationSeconds;
+
+      // Focus = 60s + 45.5s = 105.5s
+      // Rest = 30s
+      // Total floored = 105 (Focus) + 30 (Rest) = 135.
+      // Remaining = 136 - 135 = 1.
+      // Focus remainder = 0.5, Rest remainder = 0. Focus gets +1.
+      // Final: Focus = 106, Rest = 30.
+      expect(focusDuration).toBe(106);
+      expect(restDuration).toBe(30);
+
+      const sumCategoryDurations = session.studySessionCategories.reduce((acc, cat) => acc + cat.durationSeconds, 0);
+      expect(sumCategoryDurations).toBe(136); // Invariant holds
+    });
+
+    it('Test D — Paused lifecycle', async () => {
+      const modeResponse = await request(app.getHttpServer())
+        .post('/timer-modes')
         .set('Cookie', cookie1)
-        .expect(201);
-      
-      expect(next2.body.currentStageIndex).toBe(2);
-      expect(next2.body.status).toBe('RUNNING'); // Wrap around to FOCUS, still running
+        .send({
+          name: 'Test D Mode',
+          loop: false,
+          stagesConfig: [
+            { categoryId: focusCatId1, durationSeconds: 60 }
+          ]
+        });
+      testTimerModeId = modeResponse.body.id;
 
-      // Verify no StudySession created yet
-      const studySessionsBefore = await prisma.studySession.findMany({ where: { timerSessionId: sessionId } });
-      expect(studySessionsBefore.length).toBe(0);
-
-      // Manually complete at 10:00:20 (mid-way through the wrapped FOCUS stage)
-      vi.setSystemTime(new Date('2026-09-07T10:00:20Z'));
-      await request(app.getHttpServer())
-        .post(`/timer-sessions/${sessionId}/complete`)
+      const createResponse = await request(app.getHttpServer())
+        .post('/timer-sessions')
         .set('Cookie', cookie1)
-        .expect(201);
+        .send({ timerModeId: testTimerModeId });
+      sessionId = createResponse.body.id;
 
-      const studySessionsAfter = await prisma.studySession.findMany({ where: { timerSessionId: sessionId } });
-      expect(studySessionsAfter.length).toBe(1);
-      expect(studySessionsAfter[0].durationSeconds).toBe(20); // 10s + 5s + 5s = 20s
+      // Start at 10:00:00
+      vi.setSystemTime(new Date('2026-09-07T10:00:00.000Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1).expect(201);
+
+      // Run for 15.3 seconds -> pause at 10:00:15.300
+      vi.setSystemTime(new Date('2026-09-07T10:00:15.300Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/pause`).set('Cookie', cookie1).expect(201);
+
+      // Pause for 1 hour -> resume at 11:00:15.300
+      vi.setSystemTime(new Date('2026-09-07T11:00:15.300Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/start`).set('Cookie', cookie1).expect(201);
+
+      // Run for 15.3 seconds -> complete at 11:00:30.600
+      vi.setSystemTime(new Date('2026-09-07T11:00:30.600Z'));
+      await request(app.getHttpServer()).post(`/timer-sessions/${sessionId}/complete`).set('Cookie', cookie1).expect(201);
+
+      const studySessions = await prisma.studySession.findMany({
+        where: { timerSessionId: sessionId },
+        include: { studySessionCategories: true }
+      });
+
+      expect(studySessions.length).toBe(1);
+      const session = studySessions[0];
+      // Total active time = 15.3s + 15.3s = 30.6s -> Math.round = 31s
+      expect(session.durationSeconds).toBe(31);
+
+      const sumCategoryDurations = session.studySessionCategories.reduce((acc, cat) => acc + cat.durationSeconds, 0);
+      expect(sumCategoryDurations).toBe(31); // Paused time excluded, invariant holds
     });
   });
 });

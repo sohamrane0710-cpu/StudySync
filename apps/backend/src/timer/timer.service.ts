@@ -9,6 +9,8 @@ export class TimerService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createTimerMode(userId: string, dto: CreateTimerModeDto) {
+    await this.validateStagesConfigCategories(userId, dto.stagesConfig as any[]);
+    
     return this.prisma.timerMode.create({
       data: {
         userId,
@@ -18,6 +20,26 @@ export class TimerService {
         stagesConfig: dto.stagesConfig as any,
       },
     });
+  }
+
+  private async validateStagesConfigCategories(userId: string, stages: any[]) {
+    if (!stages || stages.length === 0) return;
+    
+    const categoryIds = [...new Set(stages.map((s) => s.categoryId))];
+    if (categoryIds.some(id => !id)) {
+      throw new BadRequestException('All stages must have a categoryId');
+    }
+
+    const categories = await this.prisma.timerCategory.findMany({
+      where: {
+        id: { in: categoryIds },
+        userId,
+      },
+    });
+
+    if (categories.length !== categoryIds.length) {
+      throw new BadRequestException('One or more categories are invalid or do not belong to you');
+    }
   }
 
   async getTimerModes(userId: string) {
@@ -57,6 +79,10 @@ export class TimerService {
 
     if (activeSessions) {
       throw new ConflictException('Cannot edit TimerMode because it is currently in use by an active session.');
+    }
+
+    if (dto.stagesConfig) {
+      await this.validateStagesConfigCategories(userId, dto.stagesConfig as any[]);
     }
 
     return this.prisma.timerMode.update({
@@ -280,8 +306,21 @@ export class TimerService {
       if (currentStageElapsedMs < 0) currentStageElapsedMs = 0;
 
       let previousStagesElapsedMs = 0;
+      const categoryDurations: Record<string, number> = {};
+
+      // Initialize the current stage category
+      if (currentStage && currentStage.categoryId) {
+        categoryDurations[currentStage.categoryId] = currentStageElapsedMs;
+      }
+
       for (let i = 0; i < session.currentStageIndex; i++) {
-        previousStagesElapsedMs += stages[i % stages.length].durationSeconds * 1000;
+        const pastStage = stages[i % stages.length];
+        const pastDurationMs = pastStage.durationSeconds * 1000;
+        previousStagesElapsedMs += pastDurationMs;
+
+        if (pastStage.categoryId) {
+          categoryDurations[pastStage.categoryId] = (categoryDurations[pastStage.categoryId] || 0) + pastDurationMs;
+        }
       }
 
       const totalElapsedMs = previousStagesElapsedMs + currentStageElapsedMs;
@@ -295,10 +334,7 @@ export class TimerService {
         },
       });
 
-      // StudySession only records focus time conceptually, but we'll record whatever stage it was for now, 
-      // or should we only record FOCUS stages? The prompt doesn't specify, but StudySession is the historical log.
-      // We'll create it for the completed stage duration.
-      await tx.studySession.create({
+      const studySession = await tx.studySession.create({
         data: {
           userId,
           timerSessionId: sessionId,
@@ -307,6 +343,53 @@ export class TimerService {
           durationSeconds,
         },
       });
+
+      const categoryEntries = Object.entries(categoryDurations);
+      if (categoryEntries.length > 0) {
+        // Allocate category seconds using deterministic Largest Remainder Method
+        const allocations = categoryEntries.map(([categoryId, ms]) => {
+          const exactSeconds = ms / 1000;
+          const flooredSeconds = Math.floor(exactSeconds);
+          const remainder = exactSeconds - flooredSeconds;
+          return { categoryId, flooredSeconds, remainder, finalSeconds: flooredSeconds };
+        });
+
+        const allocatedSeconds = allocations.reduce((sum, a) => sum + a.flooredSeconds, 0);
+        let remainingSeconds = durationSeconds - allocatedSeconds;
+
+        if (remainingSeconds < 0) {
+          throw new Error('Category duration allocation exceeded total session duration');
+        }
+        if (remainingSeconds > allocations.length) {
+          throw new Error('Category duration allocation required more seconds than available categories');
+        }
+
+        // Sort by remainder descending; break ties by categoryId ascending
+        allocations.sort((a, b) => {
+          if (Math.abs(b.remainder - a.remainder) > 1e-9) {
+            return b.remainder - a.remainder;
+          }
+          return a.categoryId.localeCompare(b.categoryId);
+        });
+
+        // Distribute remaining seconds one-by-one
+        for (let i = 0; i < remainingSeconds; i++) {
+          allocations[i].finalSeconds += 1;
+        }
+
+        const finalAllocatedSeconds = allocations.reduce((sum, a) => sum + a.finalSeconds, 0);
+        if (finalAllocatedSeconds !== durationSeconds) {
+          throw new Error('Category duration allocation invariant violated');
+        }
+
+        await tx.studySessionCategory.createMany({
+          data: allocations.map((a) => ({
+            studySessionId: studySession.id,
+            categoryId: a.categoryId,
+            durationSeconds: a.finalSeconds,
+          })),
+        });
+      }
 
       return completedSession;
     });

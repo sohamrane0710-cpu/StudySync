@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import { startTimerSession, pauseTimerSession, completeTimerSession, nextStageTimerSession } from '../../api.js';
-import type { TimerSession } from '../../api.js';
+import type { TimerSession, TimerCategory } from '../../api.js';
 
 interface TimerInterfaceProps {
   session: TimerSession;
+  categories: TimerCategory[];
   onSessionUpdated: (session: TimerSession | null) => void;
 }
 
-export function TimerInterface({ session, onSessionUpdated }: TimerInterfaceProps) {
+export function TimerInterface({ session, categories, onSessionUpdated }: TimerInterfaceProps) {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stage = session.timerMode?.stagesConfig[session.currentStageIndex % session.timerMode.stagesConfig.length];
+  const currentCategory = categories.find(c => c.id === stage?.categoryId);
   
   // Calculate remaining seconds authoritatively from the backend state
   const calculateRemaining = () => {
@@ -128,7 +130,7 @@ export function TimerInterface({ session, onSessionUpdated }: TimerInterfaceProp
       </div>
       
       <div className="text-xl font-medium text-slate-800 mb-8">
-        Stage: {stage.type.replace('_', ' ')}
+        Stage: {currentCategory ? currentCategory.name : 'Unknown Category'}
       </div>
 
       <div className={`text-7xl font-light tabular-nums mb-12 ${session.status === 'PAUSED' ? 'text-slate-400' : 'text-slate-900'}`}>

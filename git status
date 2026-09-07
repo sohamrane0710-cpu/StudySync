@@ -1,0 +1,23 @@
+warning: in the working copy of 'apps/backend/prisma/schema.prisma', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/backend/src/app.module.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/backend/src/auth/auth.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/backend/src/timer/dto/create-timer-mode.dto.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/backend/src/timer/timer.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/backend/test/timer.e2e-spec.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/api.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/timer/TimerInterface.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/timer/TimerModeForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/pages/SettingsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/pages/TimerPage.tsx', LF will be replaced by CRLF the next time Git touches it
+ apps/backend/prisma/schema.prisma                  |  32 [32m++[m
+ apps/backend/src/app.module.ts                     |   3 [32m+[m[31m-[m
+ apps/backend/src/auth/auth.service.ts              |   6 [32m+[m
+ .../backend/src/timer/dto/create-timer-mode.dto.ts |  12 [32m+[m[31m-[m
+ apps/backend/src/timer/timer.service.ts            |  83 [32m+++++[m[31m-[m
+ apps/backend/test/timer.e2e-spec.ts                | 331 [32m++++++++++++[m[31m---------[m
+ apps/frontend/src/api.ts                           |  34 [32m++[m[31m-[m
+ .../src/components/timer/TimerInterface.tsx        |   8 [32m+[m[31m-[m
+ .../src/components/timer/TimerModeForm.tsx         |  30 [32m+[m[31m-[m
+ apps/frontend/src/pages/SettingsPage.tsx           | 163 [32m+++++++++[m[31m-[m
+ apps/frontend/src/pages/TimerPage.tsx              |  10 [32m+[m[31m-[m
+ 11 files changed, 533 insertions(+), 179 deletions(-)

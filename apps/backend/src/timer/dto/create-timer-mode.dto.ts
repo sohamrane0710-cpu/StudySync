@@ -1,15 +1,9 @@
-import { IsString, IsOptional, IsBoolean, IsArray, ValidateNested, ArrayMinSize, IsInt, Min, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsArray, ValidateNested, ArrayMinSize, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export enum StageType {
-  FOCUS = 'FOCUS',
-  SHORT_BREAK = 'SHORT_BREAK',
-  LONG_BREAK = 'LONG_BREAK',
-}
-
 export class StageConfigDto {
-  @IsEnum(StageType)
-  type: StageType;
+  @IsString()
+  categoryId: string;
 
   @IsInt()
   @Min(1)
