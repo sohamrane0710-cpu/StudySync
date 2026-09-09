@@ -113,6 +113,8 @@ export class TimerService {
     }
   }
 
+  // --- Core Lifecycle Logic --- //
+
   async getActiveTimerSession(userId: string) {
     const sessions = await this.prisma.timerSession.findMany({
       where: {
@@ -124,14 +126,19 @@ export class TimerService {
       },
       orderBy: { createdAt: 'desc' },
       take: 1,
-      include: { timerMode: true },
     });
     
     if (sessions.length === 0) {
       throw new NotFoundException('No active timer session found');
     }
+
+    // Attempt to resolve state
+    const resolved = await this.resolveTimerState(sessions[0].id);
+    if (!resolved || resolved.status === TimerStatus.COMPLETED) {
+       throw new NotFoundException('No active timer session found');
+    }
     
-    return sessions[0];
+    return resolved;
   }
 
   async createTimerSession(userId: string, dto: CreateTimerSessionDto) {
@@ -149,10 +156,7 @@ export class TimerService {
   }
 
   async startTimerSession(userId: string, sessionId: string) {
-    const session = await this.prisma.timerSession.findUnique({
-      where: { id: sessionId },
-      include: { timerMode: true },
-    });
+    let session = await this.resolveTimerState(sessionId);
 
     if (!session) throw new NotFoundException('TimerSession not found');
     if (session.userId !== userId) throw new ForbiddenException('Not your session');
@@ -203,9 +207,7 @@ export class TimerService {
   }
 
   async pauseTimerSession(userId: string, sessionId: string) {
-    const session = await this.prisma.timerSession.findUnique({
-      where: { id: sessionId },
-    });
+    const session = await this.resolveTimerState(sessionId);
 
     if (!session) throw new NotFoundException('TimerSession not found');
     if (session.userId !== userId) throw new ForbiddenException('Not your session');
@@ -224,10 +226,7 @@ export class TimerService {
   }
 
   async nextStageTimerSession(userId: string, sessionId: string) {
-    const session = await this.prisma.timerSession.findUnique({
-      where: { id: sessionId },
-      include: { timerMode: true },
-    });
+    const session = await this.resolveTimerState(sessionId);
 
     if (!session) throw new NotFoundException('TimerSession not found');
     if (session.userId !== userId) throw new ForbiddenException('Not your session');
@@ -264,9 +263,7 @@ export class TimerService {
   }
 
   async completeTimerSession(userId: string, sessionId: string) {
-    const session = await this.prisma.timerSession.findUnique({
-      where: { id: sessionId },
-    });
+    let session = await this.resolveTimerState(sessionId);
 
     if (!session) throw new NotFoundException('TimerSession not found');
     if (session.userId !== userId) throw new ForbiddenException('Not your session');
@@ -278,120 +275,216 @@ export class TimerService {
       throw new ConflictException('Cannot complete a pending or cancelled session');
     }
 
+    return this.prisma.$transaction(async (tx) => {
+      const mode = await tx.timerMode.findUnique({ where: { id: session!.timerModeId } });
+      if (!mode) throw new NotFoundException('TimerMode not found');
+      
+      const completedSession = await this._finalizeTimerSession(tx, session, mode, new Date());
+      if (!completedSession) {
+         return tx.timerSession.findUnique({ where: { id: sessionId } });
+      }
+      return completedSession;
+    });
+  }
+
+  // --- Lazy Evaluation & Catch-up --- //
+
+  async resolveTimerState(sessionId: string) {
+    const session = await this.prisma.timerSession.findUnique({
+      where: { id: sessionId },
+      include: { timerMode: true },
+    });
+    if (!session) return null;
+
+    const now = new Date();
+
+    if (session.status !== TimerStatus.RUNNING || !session.targetEndTime || session.targetEndTime.getTime() > now.getTime()) {
+      return session; 
+    }
+
+    const stagesConfig = session.timerMode.stagesConfig as any[];
+    if (!stagesConfig || stagesConfig.length === 0) return session;
+
+    let overdueMs = now.getTime() - session.targetEndTime.getTime();
+    if (overdueMs < 0) return session;
+
+    let newCurrentStageIndex = session.currentStageIndex;
+    let newTargetEndTime = session.targetEndTime;
+    let shouldComplete = false;
+    let effectiveCompletedAt: Date | null = null;
+
+    // Fast path: if loop=true and ALL stages have autoAdvance=true
+    const allAutoAdvance = stagesConfig.every(s => s.autoAdvance === true);
+    if (session.timerMode.loop && allAutoAdvance) {
+      const loopDurationMs = stagesConfig.reduce((sum, s) => sum + s.durationSeconds, 0) * 1000;
+      if (loopDurationMs > 0) {
+        const totalLoops = Math.floor(overdueMs / loopDurationMs);
+        if (totalLoops > 0) {
+          newCurrentStageIndex += totalLoops * stagesConfig.length;
+          newTargetEndTime = new Date(newTargetEndTime.getTime() + totalLoops * loopDurationMs);
+          overdueMs = now.getTime() - newTargetEndTime.getTime();
+        }
+      }
+    }
+
+    // Resolve remaining stages iteratively
+    while (overdueMs >= 0) {
+      const currentStage = stagesConfig[newCurrentStageIndex % stagesConfig.length];
+      if (!currentStage.autoAdvance) {
+        break; // Waiting state
+      }
+
+      if (!session.timerMode.loop && newCurrentStageIndex >= stagesConfig.length - 1) {
+        shouldComplete = true;
+        effectiveCompletedAt = newTargetEndTime; // Exact historical target
+        break;
+      }
+
+      newCurrentStageIndex++;
+      const nextStage = stagesConfig[newCurrentStageIndex % stagesConfig.length];
+      newTargetEndTime = new Date(newTargetEndTime.getTime() + nextStage.durationSeconds * 1000);
+      overdueMs = now.getTime() - newTargetEndTime.getTime();
+    }
+
+    if (shouldComplete) {
+      // Execute transactional completion immediately using historical time
+      const result = await this.prisma.$transaction(async (tx) => {
+        return this._finalizeTimerSession(
+          tx, 
+          { ...session, currentStageIndex: newCurrentStageIndex, targetEndTime: newTargetEndTime }, 
+          session.timerMode, 
+          effectiveCompletedAt!
+        );
+      });
+      return result || (await this.prisma.timerSession.findUnique({ where: { id: sessionId }, include: { timerMode: true } }));
+    } else if (newCurrentStageIndex !== session.currentStageIndex) {
+      // Optimistic concurrency update
+      const result = await this.prisma.timerSession.updateMany({
+        where: {
+          id: sessionId,
+          status: TimerStatus.RUNNING,
+          currentStageIndex: session.currentStageIndex,
+          targetEndTime: session.targetEndTime,
+        },
+        data: {
+          currentStageIndex: newCurrentStageIndex,
+          targetEndTime: newTargetEndTime,
+        },
+      });
+      return this.prisma.timerSession.findUnique({ where: { id: sessionId }, include: { timerMode: true } });
+    }
+
+    return session;
+  }
+
+  private async _finalizeTimerSession(tx: any, session: any, mode: any, effectiveCompletedAt: Date) {
     if (!session.startedAt) {
         throw new ConflictException('Session has no startedAt time');
     }
 
-    const now = new Date();
-
-    return this.prisma.$transaction(async (tx) => {
-      const mode = await tx.timerMode.findUnique({ where: { id: session.timerModeId } });
-      if (!mode) throw new NotFoundException('TimerMode not found');
-      
-      const stages = mode.stagesConfig as any[];
-      const currentStage = stages[session.currentStageIndex % stages.length];
-      
-      let remainingMs = 0;
-      if (session.status === TimerStatus.PAUSED && session.pausedAt && session.targetEndTime) {
-        remainingMs = session.targetEndTime.getTime() - session.pausedAt.getTime();
-      } else if (session.targetEndTime) {
-        remainingMs = session.targetEndTime.getTime() - now.getTime();
+    // 1. CAS Update for strict completion atomicity
+    const result = await tx.timerSession.updateMany({
+      where: { id: session.id, status: TimerStatus.RUNNING },
+      data: {
+        status: TimerStatus.COMPLETED,
+        completedAt: effectiveCompletedAt,
       }
-
-      // Cap remainingMs at 0 in case they overran the timer
-      if (remainingMs < 0) remainingMs = 0;
-
-      const stageDurationMs = currentStage.durationSeconds * 1000;
-      let currentStageElapsedMs = stageDurationMs - remainingMs;
-      if (currentStageElapsedMs < 0) currentStageElapsedMs = 0;
-
-      let previousStagesElapsedMs = 0;
-      const categoryDurations: Record<string, number> = {};
-
-      // Initialize the current stage category
-      if (currentStage && currentStage.categoryId) {
-        categoryDurations[currentStage.categoryId] = currentStageElapsedMs;
-      }
-
-      for (let i = 0; i < session.currentStageIndex; i++) {
-        const pastStage = stages[i % stages.length];
-        const pastDurationMs = pastStage.durationSeconds * 1000;
-        previousStagesElapsedMs += pastDurationMs;
-
-        if (pastStage.categoryId) {
-          categoryDurations[pastStage.categoryId] = (categoryDurations[pastStage.categoryId] || 0) + pastDurationMs;
-        }
-      }
-
-      const totalElapsedMs = previousStagesElapsedMs + currentStageElapsedMs;
-      const durationSeconds = Math.round(totalElapsedMs / 1000);
-
-      const completedSession = await tx.timerSession.update({
-        where: { id: sessionId },
-        data: {
-          status: TimerStatus.COMPLETED,
-          completedAt: now,
-        },
-      });
-
-      const studySession = await tx.studySession.create({
-        data: {
-          userId,
-          timerSessionId: sessionId,
-          startedAt: session.startedAt!,
-          endedAt: now,
-          durationSeconds,
-        },
-      });
-
-      const categoryEntries = Object.entries(categoryDurations);
-      if (categoryEntries.length > 0) {
-        // Allocate category seconds using deterministic Largest Remainder Method
-        const allocations = categoryEntries.map(([categoryId, ms]) => {
-          const exactSeconds = ms / 1000;
-          const flooredSeconds = Math.floor(exactSeconds);
-          const remainder = exactSeconds - flooredSeconds;
-          return { categoryId, flooredSeconds, remainder, finalSeconds: flooredSeconds };
-        });
-
-        const allocatedSeconds = allocations.reduce((sum, a) => sum + a.flooredSeconds, 0);
-        let remainingSeconds = durationSeconds - allocatedSeconds;
-
-        if (remainingSeconds < 0) {
-          throw new Error('Category duration allocation exceeded total session duration');
-        }
-        if (remainingSeconds > allocations.length) {
-          throw new Error('Category duration allocation required more seconds than available categories');
-        }
-
-        // Sort by remainder descending; break ties by categoryId ascending
-        allocations.sort((a, b) => {
-          if (Math.abs(b.remainder - a.remainder) > 1e-9) {
-            return b.remainder - a.remainder;
-          }
-          return a.categoryId.localeCompare(b.categoryId);
-        });
-
-        // Distribute remaining seconds one-by-one
-        for (let i = 0; i < remainingSeconds; i++) {
-          allocations[i].finalSeconds += 1;
-        }
-
-        const finalAllocatedSeconds = allocations.reduce((sum, a) => sum + a.finalSeconds, 0);
-        if (finalAllocatedSeconds !== durationSeconds) {
-          throw new Error('Category duration allocation invariant violated');
-        }
-
-        await tx.studySessionCategory.createMany({
-          data: allocations.map((a) => ({
-            studySessionId: studySession.id,
-            categoryId: a.categoryId,
-            durationSeconds: a.finalSeconds,
-          })),
-        });
-      }
-
-      return completedSession;
     });
+
+    if (result.count === 0) {
+      return null; // Concurrently modified
+    }
+
+    const stages = mode.stagesConfig as any[];
+    const currentStage = stages[session.currentStageIndex % stages.length];
+    
+    let remainingMs = 0;
+    if (session.status === TimerStatus.PAUSED && session.pausedAt && session.targetEndTime) {
+      remainingMs = session.targetEndTime.getTime() - session.pausedAt.getTime();
+    } else if (session.targetEndTime) {
+      remainingMs = session.targetEndTime.getTime() - effectiveCompletedAt.getTime();
+    }
+
+    if (remainingMs < 0) remainingMs = 0;
+
+    const stageDurationMs = currentStage.durationSeconds * 1000;
+    let currentStageElapsedMs = stageDurationMs - remainingMs;
+    if (currentStageElapsedMs < 0) currentStageElapsedMs = 0;
+
+    let previousStagesElapsedMs = 0;
+    const categoryDurations: Record<string, number> = {};
+
+    if (currentStage && currentStage.categoryId) {
+      categoryDurations[currentStage.categoryId] = currentStageElapsedMs;
+    }
+
+    for (let i = 0; i < session.currentStageIndex; i++) {
+      const pastStage = stages[i % stages.length];
+      const pastDurationMs = pastStage.durationSeconds * 1000;
+      previousStagesElapsedMs += pastDurationMs;
+
+      if (pastStage.categoryId) {
+        categoryDurations[pastStage.categoryId] = (categoryDurations[pastStage.categoryId] || 0) + pastDurationMs;
+      }
+    }
+
+    const totalElapsedMs = previousStagesElapsedMs + currentStageElapsedMs;
+    const durationSeconds = Math.round(totalElapsedMs / 1000);
+
+    const studySession = await tx.studySession.create({
+      data: {
+        userId: session.userId,
+        timerSessionId: session.id,
+        startedAt: session.startedAt!,
+        endedAt: effectiveCompletedAt,
+        durationSeconds,
+      },
+    });
+
+    const categoryEntries = Object.entries(categoryDurations);
+    if (categoryEntries.length > 0) {
+      const allocations = categoryEntries.map(([categoryId, ms]) => {
+        const exactSeconds = ms / 1000;
+        const flooredSeconds = Math.floor(exactSeconds);
+        const remainder = exactSeconds - flooredSeconds;
+        return { categoryId, flooredSeconds, remainder, finalSeconds: flooredSeconds };
+      });
+
+      const allocatedSeconds = allocations.reduce((sum, a) => sum + a.flooredSeconds, 0);
+      let remainingSeconds = durationSeconds - allocatedSeconds;
+
+      if (remainingSeconds < 0) {
+        throw new Error('Category duration allocation exceeded total session duration');
+      }
+      if (remainingSeconds > allocations.length) {
+        throw new Error('Category duration allocation required more seconds than available categories');
+      }
+
+      allocations.sort((a, b) => {
+        if (Math.abs(b.remainder - a.remainder) > 1e-9) {
+          return b.remainder - a.remainder;
+        }
+        return a.categoryId.localeCompare(b.categoryId);
+      });
+
+      for (let i = 0; i < remainingSeconds; i++) {
+        allocations[i].finalSeconds += 1;
+      }
+
+      const finalAllocatedSeconds = allocations.reduce((sum, a) => sum + a.finalSeconds, 0);
+      if (finalAllocatedSeconds !== durationSeconds) {
+        throw new Error('Category duration allocation invariant violated');
+      }
+
+      await tx.studySessionCategory.createMany({
+        data: allocations.map((a) => ({
+          studySessionId: studySession.id,
+          categoryId: a.categoryId,
+          durationSeconds: a.finalSeconds,
+        })),
+      });
+    }
+
+    return tx.timerSession.findUnique({ where: { id: session.id } });
   }
 }

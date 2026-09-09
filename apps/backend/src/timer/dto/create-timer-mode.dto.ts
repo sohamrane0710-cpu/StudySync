@@ -8,6 +8,10 @@ export class StageConfigDto {
   @IsInt()
   @Min(1)
   durationSeconds: number;
+
+  @IsBoolean()
+  @IsOptional()
+  autoAdvance?: boolean;
 }
 
 export class CreateTimerModeDto {

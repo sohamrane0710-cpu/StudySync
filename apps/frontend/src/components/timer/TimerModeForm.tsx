@@ -18,20 +18,21 @@ export function TimerModeForm({ initialData, categories, onSubmit, onCancel }: T
   const defaultRestCategory = categories.find(c => c.name === 'Rest')?.id || categories[0]?.id || '';
 
   // Convert backend durationSeconds back to minutes for the UI
-  const [stagesConfig, setStagesConfig] = useState<{ categoryId: string; durationMinutes: string }[]>(
+  const [stagesConfig, setStagesConfig] = useState<{ categoryId: string; durationMinutes: string; autoAdvance: boolean }[]>(
     initialData?.stagesConfig 
       ? initialData.stagesConfig.map(s => ({
           categoryId: s.categoryId,
-          durationMinutes: Math.floor(s.durationSeconds / 60).toString()
+          durationMinutes: Math.floor(s.durationSeconds / 60).toString(),
+          autoAdvance: s.autoAdvance ?? true
         }))
-      : [{ categoryId: defaultFocusCategory, durationMinutes: '45' }, { categoryId: defaultRestCategory, durationMinutes: '15' }]
+      : [{ categoryId: defaultFocusCategory, durationMinutes: '45', autoAdvance: true }, { categoryId: defaultRestCategory, durationMinutes: '15', autoAdvance: true }]
   );
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddStage = () => {
-    setStagesConfig([...stagesConfig, { categoryId: defaultFocusCategory, durationMinutes: '45' }]);
+    setStagesConfig([...stagesConfig, { categoryId: defaultFocusCategory, durationMinutes: '45', autoAdvance: true }]);
   };
 
   const handleRemoveStage = (index: number) => {
@@ -41,9 +42,9 @@ export function TimerModeForm({ initialData, categories, onSubmit, onCancel }: T
     setStagesConfig(newStages);
   };
 
-  const handleStageChange = (index: number, field: 'categoryId' | 'durationMinutes', value: string) => {
+  const handleStageChange = (index: number, field: 'categoryId' | 'durationMinutes' | 'autoAdvance', value: string | boolean) => {
     const newStages = [...stagesConfig];
-    newStages[index][field] = value;
+    (newStages[index] as any)[field] = value;
     setStagesConfig(newStages);
   };
 
@@ -75,6 +76,7 @@ export function TimerModeForm({ initialData, categories, onSubmit, onCancel }: T
       processedStages.push({
         categoryId: stage.categoryId,
         durationSeconds: mins * 60,
+        autoAdvance: stage.autoAdvance,
       });
     }
 
@@ -179,7 +181,7 @@ export function TimerModeForm({ initialData, categories, onSubmit, onCancel }: T
                       </select>
                     </div>
 
-                    <div className="w-32 relative">
+                    <div className="w-24 relative">
                       <input
                         type="number"
                         min="1"
@@ -189,6 +191,19 @@ export function TimerModeForm({ initialData, categories, onSubmit, onCancel }: T
                         placeholder="Mins"
                       />
                       <span className="absolute right-3 top-2.5 text-sm text-slate-400 pointer-events-none">min</span>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center min-w-[70px]">
+                      <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1">
+                        Auto-Start
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={stage.autoAdvance}
+                        onChange={e => handleStageChange(idx, 'autoAdvance', e.target.checked)}
+                        className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                        title="Automatically start next stage"
+                      />
                     </div>
 
                     <button

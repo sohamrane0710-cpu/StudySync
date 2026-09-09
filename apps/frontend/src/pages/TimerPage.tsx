@@ -167,8 +167,22 @@ export function TimerPage() {
                     </span>
                   </div>
                   {mode.description && (
-                    <p className="text-sm text-slate-500 mb-6">{mode.description}</p>
+                    <p className="text-sm text-slate-500 mb-4">{mode.description}</p>
                   )}
+
+                  <div className="flex flex-col gap-1.5 mb-6 text-xs text-slate-500">
+                    {mode.stagesConfig.map((stage, idx) => {
+                      const cat = categories.find(c => c.id === stage.categoryId);
+                      return (
+                        <div key={idx} className="flex justify-between items-center bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100">
+                          <span>{idx + 1}. {cat ? cat.name : 'Unknown'} ({Math.floor(stage.durationSeconds / 60)}m)</span>
+                          <span className={`font-medium ${stage.autoAdvance ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            Auto-start next: {stage.autoAdvance ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                   
                   <div className="mt-auto pt-4 flex justify-between items-center border-t border-slate-100">
                     <div className="flex gap-2">

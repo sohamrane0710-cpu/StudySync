@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { startTimerSession, pauseTimerSession, completeTimerSession, nextStageTimerSession } from '../../api.js';
+import { startTimerSession, pauseTimerSession, completeTimerSession, nextStageTimerSession, getActiveTimerSession } from '../../api.js';
 import type { TimerSession, TimerCategory } from '../../api.js';
 
 interface TimerInterfaceProps {
@@ -41,6 +41,26 @@ export function TimerInterface({ session, categories, onSessionUpdated }: TimerI
     return 0;
   };
 
+  const isWaiting = session.status === 'RUNNING' && session.targetEndTime && new Date(session.targetEndTime).getTime() <= Date.now() && stage?.autoAdvance === false;
+  
+  const handleSyncState = async () => {
+    if (isCompleting) return;
+    try {
+      setIsCompleting(true);
+      setError(null);
+      const updated = await getActiveTimerSession();
+      if (updated) {
+        onSessionUpdated({ ...updated, timerMode: session.timerMode });
+      } else {
+        onSessionUpdated(null);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to sync timer state');
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
   useEffect(() => {
     // Initial calculation on mount/update
     setRemainingSeconds(calculateRemaining());
@@ -52,9 +72,9 @@ export function TimerInterface({ session, categories, onSessionUpdated }: TimerI
         const remaining = calculateRemaining();
         setRemainingSeconds(remaining);
         
-        // Automatically advance to the next stage when we hit 0
-        if (remaining <= 0 && !isCompleting) {
-          handleNextStage();
+        // Automatically sync state when we hit 0, unless we are already known to be in a waiting state
+        if (remaining <= 0 && !isCompleting && !isWaiting) {
+          handleSyncState();
         }
       }, 1000);
     }
@@ -133,9 +153,15 @@ export function TimerInterface({ session, categories, onSessionUpdated }: TimerI
         Stage: {currentCategory ? currentCategory.name : 'Unknown Category'}
       </div>
 
-      <div className={`text-7xl font-light tabular-nums mb-12 ${session.status === 'PAUSED' ? 'text-slate-400' : 'text-slate-900'}`}>
+      <div className={`text-7xl font-light tabular-nums mb-8 ${session.status === 'PAUSED' ? 'text-slate-400' : 'text-slate-900'}`}>
         {formatTime(remainingSeconds)}
       </div>
+
+      {isWaiting && (
+        <div className="text-amber-600 font-medium bg-amber-50 px-4 py-2 rounded-lg mb-8 border border-amber-200">
+          Waiting to start next stage...
+        </div>
+      )}
 
       {error && <div className="text-red-500 text-sm mb-4 bg-red-50 px-4 py-2 rounded">{error}</div>}
 
@@ -149,7 +175,7 @@ export function TimerInterface({ session, categories, onSessionUpdated }: TimerI
           </button>
         )}
         
-        {session.status === 'RUNNING' && (
+        {session.status === 'RUNNING' && !isWaiting && (
           <>
             <button 
               onClick={handlePause}
@@ -165,6 +191,16 @@ export function TimerInterface({ session, categories, onSessionUpdated }: TimerI
               Complete
             </button>
           </>
+        )}
+
+        {session.status === 'RUNNING' && isWaiting && (
+          <button 
+            onClick={handleNextStage}
+            disabled={isCompleting}
+            className="px-8 py-3 bg-slate-900 text-white rounded-full font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+          >
+            Start Next Stage
+          </button>
         )}
 
         {session.status === 'PAUSED' && (

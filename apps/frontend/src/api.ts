@@ -126,6 +126,7 @@ export async function deleteTimerCategory(id: string): Promise<{ success: boolea
 export interface TimerStageConfig {
   categoryId: string;
   durationSeconds: number;
+  autoAdvance: boolean;
 }
 
 export interface TimerMode {
