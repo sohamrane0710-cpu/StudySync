@@ -1,0 +1,175 @@
+/* StudySync Design System & Token Architecture */
+
+:root {
+  /* Canvas & Base Backgrounds */
+  --color-canvas: #0b0d11;
+  --color-canvas-subtle: #12151a;
+
+  /* Semantic Accent Colors */
+  --color-focus: hsl(192, 95%, 55%);
+  --color-focus-glow: hsla(192, 95%, 55%, 0.25);
+  --color-focus-bg: hsla(192, 95%, 55%, 0.08);
+
+  --color-rest: hsl(162, 75%, 50%);
+  --color-rest-glow: hsla(162, 75%, 50%, 0.25);
+  --color-rest-bg: hsla(162, 75%, 50%, 0.08);
+
+  --color-alert: hsl(28, 90%, 55%);
+  --color-alert-glow: hsla(28, 90%, 55%, 0.25);
+  --color-alert-bg: hsla(28, 90%, 55%, 0.08);
+
+  /* Monochrome & Neutral Tones */
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
+  --color-text-faint: #4b5563;
+
+  /* Optical Layering / Elevation Tokens */
+  --elevation-l0-bg: #0b0d11;
+
+  --elevation-l1-bg: rgba(255, 255, 255, 0.03);
+  --elevation-l1-backdrop: blur(12px);
+  --elevation-l1-border: 1px solid rgba(255, 255, 255, 0.06);
+  --elevation-l1-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+
+  --elevation-l2-bg: rgba(255, 255, 255, 0.05);
+  --elevation-l2-backdrop: blur(20px);
+  --elevation-l2-border: 1px solid rgba(255, 255, 255, 0.09);
+  --elevation-l2-shadow: 0 12px 32px rgba(0, 0, 0, 0.40);
+
+  --elevation-l3-bg: rgba(255, 255, 255, 0.08);
+  --elevation-l3-backdrop: blur(24px);
+  --elevation-l3-border: 1px solid rgba(255, 255, 255, 0.14);
+  --elevation-l3-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Geist Mono', 'Space Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Base Reset & Box Sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+#root {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Reusable Glass Elevation Classes */
+.glass-l1 {
+  background: var(--elevation-l1-bg);
+  backdrop-filter: var(--elevation-l1-backdrop);
+  -webkit-backdrop-filter: var(--elevation-l1-backdrop);
+  border: var(--elevation-l1-border);
+  box-shadow: var(--elevation-l1-shadow);
+}
+
+.glass-l2 {
+  background: var(--elevation-l2-bg);
+  backdrop-filter: var(--elevation-l2-backdrop);
+  -webkit-backdrop-filter: var(--elevation-l2-backdrop);
+  border: var(--elevation-l2-border);
+  box-shadow: var(--elevation-l2-shadow);
+}
+
+.glass-l3 {
+  background: var(--elevation-l3-bg);
+  backdrop-filter: var(--elevation-l3-backdrop);
+  -webkit-backdrop-filter: var(--elevation-l3-backdrop);
+  border: var(--elevation-l3-border);
+  box-shadow: var(--elevation-l3-shadow);
+}
+
+/* Fallback for browsers that do not support backdrop-filter */
+@supports not (backdrop-filter: blur(12px)) {
+  .glass-l1 {
+    background: rgba(18, 21, 26, 0.85);
+  }
+
+  .glass-l2 {
+    background: rgba(22, 26, 32, 0.90);
+  }
+
+  .glass-l3 {
+    background: rgba(26, 31, 38, 0.95);
+  }
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Monospace Tabular Readout Utility */
+.font-readout {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .halo-glow {
+    display: none !important;
+  }
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
