@@ -1,0 +1,314 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TimerPhase {
+  FOCUS
+  SHORT_BREAK
+  LONG_BREAK
+}
+
+enum TimerStatus {
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum StudySessionStatus {
+  COMPLETED
+  INTERRUPTED
+  CANCELLED
+}
+
+enum RoomRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+model Profile {
+  id          String   @id @default(uuid()) @db.Uuid
+  username    String   @unique @db.VarChar(30)
+  displayName String   @map("display_name") @db.VarChar(100)
+  avatarUrl   String?  @map("avatar_url") @db.Text
+  bio         String?  @db.VarChar(300)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  preferences                  UserPreference?
+  timerModes                   TimerMode[]
+  timerSessions                TimerSession[]
+  studySessions                StudySession[]
+  categories                   SessionCategory[]
+  labels                       SessionLabel[]
+  ownedRooms                   Room[]                         @relation("RoomOwner")
+  roomMemberships              RoomMember[]
+  createdInvites               RoomInvite[]
+  messages                     Message[]
+  roomStudySessionParticipants RoomStudySessionParticipant[]
+
+  @@map("profiles")
+}
+
+model UserPreference {
+  id                 String     @id @default(uuid()) @db.Uuid
+  userId             String     @unique @map("user_id") @db.Uuid
+  user               Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme              String     @default("dark-glass") @db.VarChar(30)
+  timerFace          String     @default("ring") @map("timer_face") @db.VarChar(30)
+  ambientPreset      String?    @map("ambient_preset") @db.VarChar(50)
+  soundVolume        Float      @default(0.7) @map("sound_volume")
+  soundEnabled       Boolean    @default(true) @map("sound_enabled")
+  autoStartBreaks    Boolean    @default(false) @map("auto_start_breaks")
+  autoStartPomodoros Boolean    @default(false) @map("auto_start_pomodoros")
+  defaultTimerModeId String?    @map("default_timer_mode_id") @db.Uuid
+  defaultTimerMode   TimerMode? @relation("DefaultTimerMode", fields: [defaultTimerModeId], references: [id], onDelete: SetNull)
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("user_preferences")
+}
+
+model TimerMode {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String?  @map("user_id") @db.Uuid
+  user               Profile? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String   @db.VarChar(60)
+  description        String?  @db.VarChar(255)
+  focusDuration      Int      @map("focus_duration")
+  shortBreakDuration Int      @map("short_break_duration")
+  longBreakDuration  Int      @map("long_break_duration")
+  longBreakInterval  Int      @default(4) @map("long_break_interval")
+  isArchived         Boolean  @default(false) @map("is_archived")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  preferredByUsers  UserPreference[]   @relation("DefaultTimerMode")
+  timerSessions     TimerSession[]
+  roomStudySessions RoomStudySession[]
+
+  @@map("timer_modes")
+}
+
+model TimerSession {
+  id                 String      @id @default(uuid()) @db.Uuid
+  userId             String      @map("user_id") @db.Uuid
+  user               Profile     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timerModeId        String?     @map("timer_mode_id") @db.Uuid
+  timerMode          TimerMode?  @relation(fields: [timerModeId], references: [id], onDelete: SetNull)
+  phase              TimerPhase  @default(FOCUS)
+  status             TimerStatus @default(RUNNING)
+  targetDuration     Int         @map("target_duration")
+  remainingSeconds   Int         @map("remaining_seconds")
+  startedAt          DateTime    @map("started_at") @db.Timestamptz(6)
+  expectedEndTime    DateTime?   @map("expected_end_time") @db.Timestamptz(6)
+  pausedAt           DateTime?   @map("paused_at") @db.Timestamptz(6)
+  cycleCount         Int         @default(0) @map("cycle_count")
+  totalFocusSeconds  Int         @default(0) @map("total_focus_seconds")
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  studySessions StudySession[]
+
+  @@index([userId, status])
+  @@map("timer_sessions")
+}
+
+model SessionCategory {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  user       Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String   @db.VarChar(50)
+  color      String   @default("#6366F1") @db.VarChar(20)
+  icon       String?  @db.VarChar(30)
+  isArchived Boolean  @default(false) @map("is_archived")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  labels                 SessionLabel[]
+  studySessionCategories StudySessionCategory[]
+
+  @@unique([userId, name])
+  @@map("session_categories")
+}
+
+model SessionLabel {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  user       Profile          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId String?          @map("category_id") @db.Uuid
+  category   SessionCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name       String           @db.VarChar(50)
+  color      String?          @db.VarChar(20)
+  isArchived Boolean          @default(false) @map("is_archived")
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  studySessionLabels StudySessionLabel[]
+
+  @@unique([userId, name])
+  @@map("session_labels")
+}
+
+model StudySession {
+  id                 String             @id @default(uuid()) @db.Uuid
+  userId             String             @map("user_id") @db.Uuid
+  user               Profile            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timerSessionId     String?            @map("timer_session_id") @db.Uuid
+  timerSession       TimerSession?      @relation(fields: [timerSessionId], references: [id], onDelete: SetNull)
+  roomStudySessionId String?            @map("room_study_session_id") @db.Uuid
+  roomStudySession   RoomStudySession?  @relation(fields: [roomStudySessionId], references: [id], onDelete: SetNull)
+  title              String?            @db.VarChar(120)
+  phase              TimerPhase         @default(FOCUS)
+  status             StudySessionStatus @default(COMPLETED)
+  targetDuration     Int                @map("target_duration")
+  actualDuration     Int                @map("actual_duration")
+  startedAt          DateTime           @map("started_at") @db.Timestamptz(6)
+  endedAt            DateTime           @map("ended_at") @db.Timestamptz(6)
+  notes              String?            @db.Text
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  categories             StudySessionCategory[]
+  labels                 StudySessionLabel[]
+  roomParticipantRecord  RoomStudySessionParticipant?
+
+  @@index([userId, startedAt])
+  @@index([userId, status])
+  @@map("study_sessions")
+}
+
+model StudySessionCategory {
+  studySessionId String          @map("study_session_id") @db.Uuid
+  categoryId     String          @map("category_id") @db.Uuid
+  studySession   StudySession    @relation(fields: [studySessionId], references: [id], onDelete: Cascade)
+  category       SessionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([studySessionId, categoryId])
+  @@map("study_session_categories")
+}
+
+model StudySessionLabel {
+  studySessionId String       @map("study_session_id") @db.Uuid
+  labelId        String       @map("label_id") @db.Uuid
+  studySession   StudySession @relation(fields: [studySessionId], references: [id], onDelete: Cascade)
+  label          SessionLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([studySessionId, labelId])
+  @@map("study_session_labels")
+}
+
+model Room {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(80)
+  description     String?  @db.VarChar(300)
+  slug            String   @unique @db.VarChar(90)
+  isPrivate       Boolean  @default(false) @map("is_private")
+  maxParticipants Int      @default(25) @map("max_participants")
+  ownerId         String   @map("owner_id") @db.Uuid
+  owner           Profile  @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  members           RoomMember[]
+  invites           RoomInvite[]
+  messages          Message[]
+  roomStudySessions RoomStudySession[]
+
+  @@map("rooms")
+}
+
+model RoomMember {
+  id       String   @id @default(uuid()) @db.Uuid
+  roomId   String   @map("room_id") @db.Uuid
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId   String   @map("user_id") @db.Uuid
+  user     Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     RoomRole @default(MEMBER)
+  joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  @@unique([roomId, userId])
+  @@index([userId])
+  @@index([roomId])
+  @@map("room_members")
+}
+
+model RoomInvite {
+  id        String    @id @default(uuid()) @db.Uuid
+  roomId    String    @map("room_id") @db.Uuid
+  room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  inviterId String    @map("inviter_id") @db.Uuid
+  inviter   Profile   @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  maxUses   Int?      @map("max_uses")
+  usesCount Int       @default(0) @map("uses_count")
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  isRevoked Boolean   @default(false) @map("is_revoked")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([tokenHash])
+  @@map("room_invites")
+}
+
+model Message {
+  id        String    @id @default(uuid()) @db.Uuid
+  roomId    String    @map("room_id") @db.Uuid
+  room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderId  String    @map("sender_id") @db.Uuid
+  sender    Profile   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content   String    @db.VarChar(2000)
+  isEdited  Boolean   @default(false) @map("is_edited")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([roomId, createdAt])
+  @@map("messages")
+}
+
+model RoomStudySession {
+  id               String       @id @default(uuid()) @db.Uuid
+  roomId           String       @map("room_id") @db.Uuid
+  room             Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  timerModeId      String?      @map("timer_mode_id") @db.Uuid
+  timerMode        TimerMode?   @relation(fields: [timerModeId], references: [id], onDelete: SetNull)
+  phase            TimerPhase   @default(FOCUS)
+  status           TimerStatus  @default(RUNNING)
+  targetDuration   Int          @map("target_duration")
+  remainingSeconds Int          @map("remaining_seconds")
+  startedAt        DateTime     @map("started_at") @db.Timestamptz(6)
+  expectedEndTime  DateTime?    @map("expected_end_time") @db.Timestamptz(6)
+  pausedAt         DateTime?    @map("paused_at") @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  participants  RoomStudySessionParticipant[]
+  studySessions StudySession[]
+
+  @@index([roomId, status])
+  @@map("room_study_sessions")
+}
+
+model RoomStudySessionParticipant {
+  id                     String            @id @default(uuid()) @db.Uuid
+  roomStudySessionId     String            @map("room_study_session_id") @db.Uuid
+  roomStudySession       RoomStudySession  @relation(fields: [roomStudySessionId], references: [id], onDelete: Cascade)
+  userId                 String            @map("user_id") @db.Uuid
+  user                   Profile           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt               DateTime          @default(now()) @map("joined_at") @db.Timestamptz(6)
+  leftAt                 DateTime?         @map("left_at") @db.Timestamptz(6)
+  creditedSeconds        Int               @default(0) @map("credited_seconds")
+  personalStudySessionId String?           @unique @map("personal_study_session_id") @db.Uuid
+  personalStudySession   StudySession?     @relation(fields: [personalStudySessionId], references: [id], onDelete: SetNull)
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([roomStudySessionId, userId])
+  @@map("room_study_session_participants")
+}
