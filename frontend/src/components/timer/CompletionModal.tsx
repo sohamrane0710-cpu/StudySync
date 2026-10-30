@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -8,16 +8,19 @@ import { categoriesApi } from '@/lib/api/categories';
 import { labelsApi } from '@/lib/api/labels';
 import { formatSecondsToHuman } from '@/lib/utils/format';
 import type { CompleteTimerPayload, TimerPhase } from '@/types/timer';
-import { CheckCircle2, Tag, Folder } from 'lucide-react';
+import { CheckCircle2, Tag, Folder, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 interface CompletionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (payload: CompleteTimerPayload) => Promise<void>;
+  onConfirm: (payload: Omit<CompleteTimerPayload, 'timerSessionId'>) => Promise<void>;
   targetDuration: number;
   phase: TimerPhase;
   isMutating: boolean;
+  initialTitle?: string;
+  initialCategoryId?: string | null;
+  initialLabelIds?: string[];
 }
 
 export const CompletionModal: React.FC<CompletionModalProps> = ({
@@ -27,15 +30,31 @@ export const CompletionModal: React.FC<CompletionModalProps> = ({
   targetDuration,
   phase,
   isMutating,
+  initialTitle,
+  initialCategoryId,
+  initialLabelIds,
 }) => {
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(initialTitle || '');
   const [notes, setNotes] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(initialCategoryId || null);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>(initialLabelIds || []);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Trigger celebration confetti upon opening
+  const isPending = isMutating || isSubmitting;
+
+  const prevIsOpenRef = useRef(false);
+
+  // Trigger celebration confetti upon opening and initialize form state
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
+      setTitle(initialTitle || '');
+      setNotes('');
+      setSelectedCategoryId(initialCategoryId || null);
+      setSelectedLabelIds(initialLabelIds ? [...initialLabelIds] : []);
+      setError(null);
+      setIsSubmitting(false);
+
       confetti({
         particleCount: 80,
         spread: 70,
@@ -43,7 +62,8 @@ export const CompletionModal: React.FC<CompletionModalProps> = ({
         colors: ['#F59E0B', '#14B8A6', '#6366F1', '#10B981'],
       });
     }
-  }, [isOpen]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, initialTitle, initialCategoryId, initialLabelIds]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
@@ -59,14 +79,45 @@ export const CompletionModal: React.FC<CompletionModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onConfirm({
-      title: title.trim() || undefined,
-      notes: notes.trim() || undefined,
-      categoryIds: selectedCategoryId ? [selectedCategoryId] : undefined,
-      labelIds: selectedLabelIds.length > 0 ? selectedLabelIds : undefined,
-      advanceToNextPhase: true,
-    });
-    onClose();
+    if (isPending) return;
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      await onConfirm({
+        title: title.trim() || undefined,
+        notes: notes.trim() || undefined,
+        categoryIds: selectedCategoryId ? [selectedCategoryId] : [],
+        labelIds: selectedLabelIds.length > 0 ? selectedLabelIds : [],
+        advanceToNextPhase: true,
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to complete session. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkipTagging = async () => {
+    if (isPending) return;
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      await onConfirm({
+        title: undefined,
+        notes: undefined,
+        categoryIds: [],
+        labelIds: [],
+        advanceToNextPhase: true,
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to complete session. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const toggleLabel = (labelId: string) => {
@@ -80,7 +131,7 @@ export const CompletionModal: React.FC<CompletionModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Session Completed"
-      description={`Great focus! You completed ${formatSecondsToHuman(targetDuration)} of ${phase.toLowerCase().replace('_', ' ')}.`}
+      description={`Great focus! You completed ${formatSecondsToHuman(targetDuration)} of ${(phase || 'focus').toLowerCase().replace('_', ' ')}.`}
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
@@ -180,11 +231,29 @@ export const CompletionModal: React.FC<CompletionModalProps> = ({
           />
         </div>
 
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-xs">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/5">
-          <Button variant="ghost" type="button" onClick={onClose} disabled={isMutating}>
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={handleSkipTagging}
+            disabled={isPending}
+            isLoading={isSubmitting}
+          >
             Skip Tagging
           </Button>
-          <Button variant="primary" type="submit" isLoading={isMutating}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={isPending}
+            isLoading={isPending}
+          >
             Save & Finish
           </Button>
         </div>

@@ -1,17 +1,19 @@
 import React from 'react';
 import { formatSecondsToMMSS } from '@/lib/utils/format';
-import type { TimerPhase } from '@/types/timer';
+import type { TimerDirection, TimerPhase } from '@/types/timer';
 import { cn } from '@/lib/utils/cn';
 
 interface FlipFaceProps {
   displaySeconds: number;
   phase: TimerPhase;
   isRunning: boolean;
+  direction?: TimerDirection;
+  stepName?: string;
 }
 
 const FlipDigitCard: React.FC<{ digit: string }> = React.memo(({ digit }) => {
   return (
-    <div className="relative flex flex-col items-center justify-center w-14 sm:w-18 md:w-22 h-20 sm:h-26 md:h-32 bg-[#12151A] rounded-xl sm:rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+    <div className="relative flex flex-col items-center justify-center w-14 sm:w-20 md:w-24 h-20 sm:h-28 md:h-32 bg-[#12151A] rounded-xl sm:rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
       {/* Top Half */}
       <div className="absolute inset-x-0 top-0 h-1/2 bg-white/[0.02] border-b border-black/40 flex items-end justify-center overflow-hidden">
         <span className="text-4xl sm:text-6xl md:text-7xl font-bold font-mono text-zinc-100 translate-y-1/2">
@@ -34,7 +36,13 @@ const FlipDigitCard: React.FC<{ digit: string }> = React.memo(({ digit }) => {
 
 FlipDigitCard.displayName = 'FlipDigitCard';
 
-export const FlipFace: React.FC<FlipFaceProps> = ({ displaySeconds, phase, isRunning }) => {
+export const FlipFace: React.FC<FlipFaceProps> = ({
+  displaySeconds,
+  phase,
+  isRunning,
+  direction = 'COUNTDOWN',
+  stepName,
+}) => {
   const timeFormatted = formatSecondsToMMSS(displaySeconds);
   const [minStr, secStr] = timeFormatted.split(':');
   const m1 = minStr[0] || '0';
@@ -43,6 +51,7 @@ export const FlipFace: React.FC<FlipFaceProps> = ({ displaySeconds, phase, isRun
   const s2 = secStr[1] || '0';
 
   const isBreak = phase.includes('BREAK');
+  const isCountUp = direction === 'COUNT_UP';
 
   return (
     <div className="flex flex-col items-center justify-center p-6 select-none">
@@ -72,7 +81,7 @@ export const FlipFace: React.FC<FlipFaceProps> = ({ displaySeconds, phase, isRun
         <FlipDigitCard digit={s2} />
       </div>
 
-      <div className="mt-5">
+      <div className="mt-5 flex items-center gap-2">
         <span
           className={cn(
             'text-xs uppercase tracking-widest font-semibold px-3 py-1 rounded-full border',
@@ -81,8 +90,13 @@ export const FlipFace: React.FC<FlipFaceProps> = ({ displaySeconds, phase, isRun
               : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
           )}
         >
-          {phase.replace('_', ' ')}
+          {stepName || phase.replace('_', ' ')}
         </span>
+        {isCountUp && (
+          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400">
+            Count Up
+          </span>
+        )}
       </div>
     </div>
   );

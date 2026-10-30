@@ -13,26 +13,69 @@ export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateCategoryDto) {
-    const existing = await this.prisma.sessionCategory.findFirst({
+    const name = dto.name.trim();
+
+    const active = await this.prisma.sessionCategory.findFirst({
       where: {
         userId,
-        name: { equals: dto.name, mode: 'insensitive' },
+        name: { equals: name, mode: 'insensitive' },
         isArchived: false,
       },
     });
 
-    if (existing) {
-      throw new ConflictException(`Category "${dto.name}" already exists`);
+    if (active) {
+      throw new ConflictException(`Category "${name}" already exists`);
     }
 
-    return this.prisma.sessionCategory.create({
-      data: {
+    const archived = await this.prisma.sessionCategory.findFirst({
+      where: {
         userId,
-        name: dto.name,
-        color: dto.color || '#6366F1',
-        icon: dto.icon,
+        name: { equals: name, mode: 'insensitive' },
+        isArchived: true,
       },
     });
+
+    if (archived) {
+      return this.prisma.sessionCategory.update({
+        where: { id: archived.id },
+        data: {
+          isArchived: false,
+          name,
+          ...(dto.color && { color: dto.color }),
+          ...(dto.icon !== undefined && { icon: dto.icon }),
+        },
+      });
+    }
+
+    try {
+      return await this.prisma.sessionCategory.create({
+        data: {
+          userId,
+          name,
+          color: dto.color || '#6366F1',
+          icon: dto.icon,
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        const raceArchived = await this.prisma.sessionCategory.findFirst({
+          where: { userId, name: { equals: name, mode: 'insensitive' }, isArchived: true },
+        });
+        if (raceArchived) {
+          return this.prisma.sessionCategory.update({
+            where: { id: raceArchived.id },
+            data: {
+              isArchived: false,
+              name,
+              ...(dto.color && { color: dto.color }),
+              ...(dto.icon !== undefined && { icon: dto.icon }),
+            },
+          });
+        }
+        throw new ConflictException(`Category "${name}" already exists`);
+      }
+      throw err;
+    }
   }
 
   async findAll(userId: string) {
@@ -75,28 +118,35 @@ export class CategoriesService {
     await this.findOne(userId, id);
 
     if (dto.name) {
+      const name = dto.name.trim();
       const duplicate = await this.prisma.sessionCategory.findFirst({
         where: {
           userId,
-          name: { equals: dto.name, mode: 'insensitive' },
+          name: { equals: name, mode: 'insensitive' },
           id: { not: id },
-          isArchived: false,
         },
       });
 
       if (duplicate) {
-        throw new ConflictException(`Category "${dto.name}" already exists`);
+        throw new ConflictException(`Category "${name}" already exists`);
       }
     }
 
-    return this.prisma.sessionCategory.update({
-      where: { id },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.color !== undefined && { color: dto.color }),
-        ...(dto.icon !== undefined && { icon: dto.icon }),
-      },
-    });
+    try {
+      return await this.prisma.sessionCategory.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name.trim() }),
+          ...(dto.color !== undefined && { color: dto.color }),
+          ...(dto.icon !== undefined && { icon: dto.icon }),
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new ConflictException(`Category "${dto.name?.trim()}" already exists`);
+      }
+      throw err;
+    }
   }
 
   async remove(userId: string, id: string) {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatSecondsToMMSS } from '@/lib/utils/format';
-import type { TimerPhase } from '@/types/timer';
+import type { TimerDirection, TimerPhase } from '@/types/timer';
 import { cn } from '@/lib/utils/cn';
 
 interface DigitalFaceProps {
@@ -8,6 +8,8 @@ interface DigitalFaceProps {
   targetDuration: number;
   phase: TimerPhase;
   isRunning: boolean;
+  direction?: TimerDirection;
+  stepName?: string;
 }
 
 export const DigitalFace: React.FC<DigitalFaceProps> = ({
@@ -15,13 +17,26 @@ export const DigitalFace: React.FC<DigitalFaceProps> = ({
   targetDuration,
   phase,
   isRunning,
+  direction = 'COUNTDOWN',
+  stepName,
 }) => {
   const timeFormatted = formatSecondsToMMSS(displaySeconds);
   const [mins, secs] = timeFormatted.split(':');
   const isBreak = phase.includes('BREAK');
+  const isCountUp = direction === 'COUNT_UP';
 
   const progressPercent = targetDuration > 0
-    ? Math.round(Math.min(100, Math.max(0, ((targetDuration - displaySeconds) / targetDuration) * 100)))
+    ? Math.round(
+        Math.min(
+          100,
+          Math.max(
+            0,
+            isCountUp
+              ? (displaySeconds / targetDuration) * 100
+              : ((targetDuration - displaySeconds) / targetDuration) * 100,
+          ),
+        ),
+      )
     : 0;
 
   return (
@@ -48,7 +63,7 @@ export const DigitalFace: React.FC<DigitalFaceProps> = ({
         <span
           className={cn(
             'text-5xl sm:text-6xl font-bold text-zinc-500 font-mono transition-opacity duration-300',
-            isRunning ? 'animate-pulse text-amber-400' : 'opacity-60'
+            isRunning ? (isBreak ? 'animate-pulse text-teal-400' : 'animate-pulse text-amber-400') : 'opacity-60'
           )}
         >
           :
@@ -63,11 +78,20 @@ export const DigitalFace: React.FC<DigitalFaceProps> = ({
       </div>
 
       {/* Progress & phase indicator bar */}
-      <div className="w-full flex items-center justify-between mt-4 px-2 text-xs text-zinc-400">
-        <span className="font-medium tracking-wide uppercase">
-          {phase.replace('_', ' ')}
+      <div className="w-full flex items-center justify-between mt-4 px-2 text-xs text-zinc-400 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-medium tracking-wide uppercase">
+            {stepName || phase.replace('_', ' ')}
+          </span>
+          {isCountUp && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400">
+              COUNT UP
+            </span>
+          )}
+        </div>
+        <span className="font-mono">
+          {isCountUp ? `${progressPercent}% of target` : `${progressPercent}% complete`}
         </span>
-        <span className="font-mono">{progressPercent}% complete</span>
       </div>
     </div>
   );

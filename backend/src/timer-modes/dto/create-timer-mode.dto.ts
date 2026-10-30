@@ -1,44 +1,75 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { TimerDirection } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { CreateTimerModeStepDto } from './create-timer-mode-step.dto';
 
 export class CreateTimerModeDto {
-  @ApiProperty({ example: 'Deep Focus 50/10' })
+  @ApiProperty({ example: 'Deep Focus Sequence' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(60)
   name: string;
 
-  @ApiPropertyOptional({ example: 'Extended 50m focus with 10m short breaks' })
+  @ApiPropertyOptional({ example: 'Custom alternating sequence for intense study' })
   @IsOptional()
   @IsString()
   @MaxLength(255)
   description?: string;
 
-  @ApiProperty({ example: 3000, description: 'Focus duration in seconds (e.g. 50 minutes = 3000s)' })
-  @IsInt()
-  @Min(60)
-  focusDuration: number;
+  @ApiPropertyOptional({ example: true, default: true, description: 'Whether sequence loops continuously upon reaching the final step' })
+  @IsOptional()
+  @IsBoolean()
+  isLooping?: boolean = true;
 
-  @ApiProperty({ example: 600, description: 'Short break duration in seconds (e.g. 10 minutes = 600s)' })
-  @IsInt()
-  @Min(60)
-  shortBreakDuration: number;
+  @ApiPropertyOptional({ enum: TimerDirection, default: TimerDirection.COUNTDOWN })
+  @IsOptional()
+  @IsEnum(TimerDirection)
+  defaultDirection?: TimerDirection = TimerDirection.COUNTDOWN;
 
-  @ApiProperty({ example: 1800, description: 'Long break duration in seconds (e.g. 30 minutes = 1800s)' })
-  @IsInt()
-  @Min(60)
-  longBreakDuration: number;
+  @ApiPropertyOptional({
+    type: [CreateTimerModeStepDto],
+    description: 'Ordered list of timer sequence steps',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTimerModeStepDto)
+  steps?: CreateTimerModeStepDto[];
 
-  @ApiPropertyOptional({ example: 4, description: 'Cycles before long break' })
+  // Legacy fallback fields (preserved for zero disruption with existing clients and tests)
+  @ApiPropertyOptional({ example: 1500, description: 'Legacy focus duration in seconds' })
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  focusDuration?: number;
+
+  @ApiPropertyOptional({ example: 300, description: 'Legacy short break duration in seconds' })
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  shortBreakDuration?: number;
+
+  @ApiPropertyOptional({ example: 900, description: 'Legacy long break duration in seconds' })
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  longBreakDuration?: number;
+
+  @ApiPropertyOptional({ example: 4, description: 'Legacy cycles before long break' })
   @IsOptional()
   @IsInt()
   @Min(1)
-  longBreakInterval?: number = 4;
+  longBreakInterval?: number;
 }

@@ -54,6 +54,8 @@ export class StudySessionsService {
       data: {
         userId,
         title: dto.title,
+        stepName: dto.stepName,
+        stepIndex: dto.stepIndex,
         phase: dto.phase || 'FOCUS',
         status: dto.status || 'COMPLETED',
         targetDuration: dto.targetDuration,

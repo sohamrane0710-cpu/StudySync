@@ -19,6 +19,18 @@ export class CreateStudySessionDto {
   @MaxLength(120)
   title?: string;
 
+  @ApiPropertyOptional({ example: 'Focus Round 1' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  stepName?: string;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  stepIndex?: number;
+
   @ApiPropertyOptional({ enum: TimerPhase, default: TimerPhase.FOCUS })
   @IsOptional()
   @IsEnum(TimerPhase)

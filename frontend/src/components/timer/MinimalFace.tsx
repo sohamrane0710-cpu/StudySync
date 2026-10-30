@@ -1,20 +1,25 @@
 import React from 'react';
 import { formatSecondsToMMSS } from '@/lib/utils/format';
-import type { TimerPhase } from '@/types/timer';
+import type { TimerDirection, TimerPhase } from '@/types/timer';
 import { cn } from '@/lib/utils/cn';
 
 interface MinimalFaceProps {
   displaySeconds: number;
   phase: TimerPhase;
   isRunning: boolean;
+  direction?: TimerDirection;
+  stepName?: string;
 }
 
 export const MinimalFace: React.FC<MinimalFaceProps> = ({
   displaySeconds,
   phase,
   isRunning,
+  direction = 'COUNTDOWN',
+  stepName,
 }) => {
   const isBreak = phase.includes('BREAK');
+  const isCountUp = direction === 'COUNT_UP';
 
   return (
     <div className="flex flex-col items-center justify-center p-8 select-none">
@@ -26,8 +31,13 @@ export const MinimalFace: React.FC<MinimalFaceProps> = ({
           )}
         />
         <span className="text-xs uppercase tracking-widest text-zinc-400 font-medium">
-          {phase.replace('_', ' ')}
+          {stepName || phase.replace('_', ' ')}
         </span>
+        {isCountUp && (
+          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-500">
+            Count Up
+          </span>
+        )}
       </div>
 
       <div className="my-6">

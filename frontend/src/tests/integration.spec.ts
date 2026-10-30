@@ -81,6 +81,8 @@ describe('End-to-End Live API Integration Audit', () => {
     expect(allModes.some((m) => m.id === createdModeId)).toBe(true);
   });
 
+  let activeTimerId: string;
+
   // 4. Personal Timer Lifecycle & Recovery
   it('Journey 4: starts, verifies active recovery, pauses, resumes, and completes timer', async () => {
     // Check if any existing active timer is left, cancel it first
@@ -96,6 +98,7 @@ describe('End-to-End Live API Integration Audit', () => {
     });
     expect(started.status).toBe('RUNNING');
     expect(started.expectedEndTime).toBeDefined();
+    activeTimerId = started.id;
 
     // Verify recovery via getActiveTimer
     const recovered = await timersApi.getActiveTimer();
@@ -143,6 +146,7 @@ describe('End-to-End Live API Integration Audit', () => {
   // 6. Complete Session with Tagging & verify history
   it('Journey 6: completes active timer with taxonomy tagging and verifies session record', async () => {
     const completeResult = await timersApi.completeTimer({
+      timerSessionId: activeTimerId,
       title: 'Audited Focus Block',
       notes: 'Completed full lifecycle integration test',
       categoryIds: [createdCategoryId],

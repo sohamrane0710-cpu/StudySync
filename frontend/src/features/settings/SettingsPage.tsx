@@ -23,6 +23,9 @@ import {
   Copy,
   Sparkles,
   Check,
+  AlertTriangle,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
@@ -31,11 +34,25 @@ export const SettingsPage: React.FC = () => {
   const { profile, refreshProfile } = useAuth();
   const { preferences, updatePreferences } = usePreferences();
 
-  // Profile form state
+  // Profile form state with dirty tracking
   const [displayName, setDisplayName] = useState(profile?.displayName || '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl || '');
   const [bio, setBio] = useState(profile?.bio || '');
+  const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Global action error state for deletions/duplications
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Synchronize form when profile becomes available or updates (without overwriting uncommitted edits)
+  React.useEffect(() => {
+    if (profile && !isProfileDirty) {
+      setDisplayName(profile.displayName || '');
+      setAvatarUrl(profile.avatarUrl || '');
+      setBio(profile.bio || '');
+    }
+  }, [profile, isProfileDirty]);
 
   // Custom Mode Modal state
   const [isModeModalOpen, setIsModeModalOpen] = useState(false);
@@ -79,10 +96,69 @@ export const SettingsPage: React.FC = () => {
         avatarUrl: avatarUrl.trim() || undefined,
         bio: bio.trim() || undefined,
       }),
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
+      setProfileError(null);
       await refreshProfile();
+      if (updated) {
+        setDisplayName(updated.displayName || '');
+        setAvatarUrl(updated.avatarUrl || '');
+        setBio(updated.bio || '');
+      }
+      setIsProfileDirty(false);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
+    },
+    onError: (err: any) => {
+      setProfileError(err?.message || 'Failed to update profile');
+    },
+  });
+
+  // Delete / Archive Mode Mutation
+  const deleteModeMutation = useMutation({
+    mutationFn: (id: string) => timerModesApi.deleteTimerMode(id),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ['timer-modes'] });
+    },
+    onError: (err: any) => {
+      setActionError(err?.message || 'Failed to archive timer mode');
+    },
+  });
+
+  // Duplicate Mode Mutation
+  const duplicateModeMutation = useMutation({
+    mutationFn: (id: string) => timerModesApi.duplicateTimerMode(id),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ['timer-modes'] });
+    },
+    onError: (err: any) => {
+      setActionError(err?.message || 'Failed to duplicate timer mode');
+    },
+  });
+
+  // Delete Category Mutation
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => categoriesApi.deleteCategory(id),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['labels'] });
+    },
+    onError: (err: any) => {
+      setActionError(err?.message || 'Failed to delete category');
+    },
+  });
+
+  // Delete Label Mutation
+  const deleteLabelMutation = useMutation({
+    mutationFn: (id: string) => labelsApi.deleteLabel(id),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ['labels'] });
+    },
+    onError: (err: any) => {
+      setActionError(err?.message || 'Failed to delete label');
     },
   });
 
@@ -172,16 +248,37 @@ export const SettingsPage: React.FC = () => {
           }}
           className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1"
         >
+          {profileError && (
+            <div className="sm:col-span-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{profileError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProfileError(null)}
+                className="text-red-400 hover:text-red-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <Input
             label="Display Name"
             value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
+            onChange={(e) => {
+              setDisplayName(e.target.value);
+              setIsProfileDirty(true);
+            }}
             placeholder="Your name"
           />
           <Input
             label="Avatar Image URL"
             value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
+            onChange={(e) => {
+              setAvatarUrl(e.target.value);
+              setIsProfileDirty(true);
+            }}
             placeholder="https://..."
           />
           <div className="sm:col-span-2 flex flex-col gap-1.5">
@@ -189,7 +286,10 @@ export const SettingsPage: React.FC = () => {
             <textarea
               rows={2}
               value={bio}
-              onChange={(e) => setBio(e.target.value)}
+              onChange={(e) => {
+                setBio(e.target.value);
+                setIsProfileDirty(true);
+              }}
               placeholder="What are you mastering?"
               className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-3 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/50 resize-none"
             />
@@ -343,9 +443,28 @@ export const SettingsPage: React.FC = () => {
           </Button>
         </div>
 
+        {actionError && (
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{actionError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              className="text-red-400 hover:text-red-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {modes.map((mode) => {
             const isSystem = mode.userId === null;
+            const isDuplicating = duplicateModeMutation.isPending && duplicateModeMutation.variables === mode.id;
+            const isDeleting = deleteModeMutation.isPending && deleteModeMutation.variables === mode.id;
+
             return (
               <div
                 key={mode.id}
@@ -369,7 +488,9 @@ export const SettingsPage: React.FC = () => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => timerModesApi.duplicateTimerMode(mode.id).then(() => queryClient.invalidateQueries({ queryKey: ['timer-modes'] }))}
+                    disabled={duplicateModeMutation.isPending || deleteModeMutation.isPending}
+                    isLoading={isDuplicating}
+                    onClick={() => duplicateModeMutation.mutate(mode.id)}
                     title="Duplicate mode"
                     className="w-7 h-7 text-zinc-400"
                   >
@@ -379,7 +500,9 @@ export const SettingsPage: React.FC = () => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => timerModesApi.deleteTimerMode(mode.id).then(() => queryClient.invalidateQueries({ queryKey: ['timer-modes'] }))}
+                      disabled={deleteModeMutation.isPending || duplicateModeMutation.isPending}
+                      isLoading={isDeleting}
+                      onClick={() => deleteModeMutation.mutate(mode.id)}
                       title="Archive mode"
                       className="w-7 h-7 text-red-400 hover:bg-red-500/10"
                     >
@@ -412,29 +535,37 @@ export const SettingsPage: React.FC = () => {
 
         {/* Categories List */}
         <div className="flex flex-wrap gap-2 pt-1">
-          {categories.map((cat) => (
-            <div
-              key={cat.id}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border backdrop-blur-md text-xs font-medium"
-              style={{
-                backgroundColor: `${cat.color}15`,
-                borderColor: `${cat.color}35`,
-                color: cat.color,
-              }}
-            >
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-              <span>{cat.name}</span>
-              <button
-                onClick={() =>
-                  categoriesApi.deleteCategory(cat.id).then(() => queryClient.invalidateQueries({ queryKey: ['categories'] }))
-                }
-                className="opacity-60 hover:opacity-100 transition-opacity ml-1"
-                title="Delete category"
+          {categories.map((cat) => {
+            const isDeletingCat = deleteCategoryMutation.isPending && deleteCategoryMutation.variables === cat.id;
+
+            return (
+              <div
+                key={cat.id}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border backdrop-blur-md text-xs font-medium"
+                style={{
+                  backgroundColor: `${cat.color}15`,
+                  borderColor: `${cat.color}35`,
+                  color: cat.color,
+                }}
               >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                <span>{cat.name}</span>
+                <button
+                  type="button"
+                  disabled={deleteCategoryMutation.isPending || deleteLabelMutation.isPending}
+                  onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                  className="opacity-60 hover:opacity-100 transition-opacity ml-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Delete category"
+                >
+                  {isDeletingCat ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-current" />
+                  ) : (
+                    <Trash2 className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
+            );
+          })}
           {categories.length === 0 && (
             <span className="text-xs text-zinc-500">No categories created yet. Click "+ Category" to add one.</span>
           )}
@@ -442,28 +573,36 @@ export const SettingsPage: React.FC = () => {
 
         {/* Labels List */}
         <div className="flex flex-wrap gap-1.5 pt-2 border-t border-white/5">
-          {labels.map((lbl) => (
-            <div
-              key={lbl.id}
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-medium"
-              style={{
-                backgroundColor: `${lbl.color}15`,
-                borderColor: `${lbl.color}30`,
-                color: lbl.color,
-              }}
-            >
-              <span>#{lbl.name}</span>
-              <button
-                onClick={() =>
-                  labelsApi.deleteLabel(lbl.id).then(() => queryClient.invalidateQueries({ queryKey: ['labels'] }))
-                }
-                className="opacity-60 hover:opacity-100 transition-opacity ml-0.5"
-                title="Delete label"
+          {labels.map((lbl) => {
+            const isDeletingLbl = deleteLabelMutation.isPending && deleteLabelMutation.variables === lbl.id;
+
+            return (
+              <div
+                key={lbl.id}
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-medium"
+                style={{
+                  backgroundColor: `${lbl.color}15`,
+                  borderColor: `${lbl.color}30`,
+                  color: lbl.color,
+                }}
               >
-                <Trash2 className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          ))}
+                <span>#{lbl.name}</span>
+                <button
+                  type="button"
+                  disabled={deleteLabelMutation.isPending || deleteCategoryMutation.isPending}
+                  onClick={() => deleteLabelMutation.mutate(lbl.id)}
+                  className="opacity-60 hover:opacity-100 transition-opacity ml-0.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Delete label"
+                >
+                  {isDeletingLbl ? (
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-current" />
+                  ) : (
+                    <Trash2 className="w-2.5 h-2.5" />
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 

@@ -8,6 +8,7 @@ describe('2. Personal Timer State Machine and Idempotency', () => {
   let prisma: PrismaService;
   const userId = '22222222-2222-4222-8222-222222222222';
   let token: string;
+  let timerSessionId: string;
 
   beforeAll(async () => {
     const testSetup = await createTestApp();
@@ -35,6 +36,7 @@ describe('2. Personal Timer State Machine and Idempotency', () => {
     expect(res.body.phase).toBe('FOCUS');
     expect(res.body.targetDuration).toBe(1500);
     expect(res.body.authoritativeRemainingSeconds).toBe(1500);
+    timerSessionId = res.body.id;
   });
 
   it('rejects starting a concurrent active timer with 409 Conflict', async () => {
@@ -77,6 +79,7 @@ describe('2. Personal Timer State Machine and Idempotency', () => {
       .post('/api/v1/timers/complete')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        timerSessionId,
         title: 'Deep Work on Compiler Design',
         notes: 'AST transformations and semantic checks',
       });
@@ -98,6 +101,7 @@ describe('2. Personal Timer State Machine and Idempotency', () => {
       .post('/api/v1/timers/complete')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        timerSessionId,
         title: 'Deep Work on Compiler Design',
       });
 

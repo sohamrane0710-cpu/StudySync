@@ -28,29 +28,76 @@ export class LabelsService {
       }
     }
 
-    const existing = await this.prisma.sessionLabel.findFirst({
+    const name = dto.name.trim();
+
+    const activeExisting = await this.prisma.sessionLabel.findFirst({
       where: {
         userId,
-        name: { equals: dto.name, mode: 'insensitive' },
+        name: { equals: name, mode: 'insensitive' },
         isArchived: false,
       },
     });
 
-    if (existing) {
-      throw new ConflictException(`Label "${dto.name}" already exists`);
+    if (activeExisting) {
+      throw new ConflictException(`Label "${name}" already exists`);
     }
 
-    return this.prisma.sessionLabel.create({
-      data: {
+    const archivedExisting = await this.prisma.sessionLabel.findFirst({
+      where: {
         userId,
-        name: dto.name,
-        color: dto.color,
-        categoryId: dto.categoryId,
-      },
-      include: {
-        category: true,
+        name: { equals: name, mode: 'insensitive' },
+        isArchived: true,
       },
     });
+
+    if (archivedExisting) {
+      return this.prisma.sessionLabel.update({
+        where: { id: archivedExisting.id },
+        data: {
+          isArchived: false,
+          name,
+          ...(dto.color !== undefined && { color: dto.color }),
+          ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
+        },
+        include: {
+          category: true,
+        },
+      });
+    }
+
+    try {
+      return await this.prisma.sessionLabel.create({
+        data: {
+          userId,
+          name,
+          color: dto.color,
+          categoryId: dto.categoryId,
+        },
+        include: {
+          category: true,
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        const raceArchived = await this.prisma.sessionLabel.findFirst({
+          where: { userId, name: { equals: name, mode: 'insensitive' }, isArchived: true },
+        });
+        if (raceArchived) {
+          return this.prisma.sessionLabel.update({
+            where: { id: raceArchived.id },
+            data: {
+              isArchived: false,
+              name,
+              ...(dto.color !== undefined && { color: dto.color }),
+              ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
+            },
+            include: { category: true },
+          });
+        }
+        throw new ConflictException(`Label "${name}" already exists`);
+      }
+      throw err;
+    }
   }
 
   async findAll(userId: string, categoryId?: string) {
@@ -104,31 +151,38 @@ export class LabelsService {
     }
 
     if (dto.name) {
+      const name = dto.name.trim();
       const duplicate = await this.prisma.sessionLabel.findFirst({
         where: {
           userId,
-          name: { equals: dto.name, mode: 'insensitive' },
+          name: { equals: name, mode: 'insensitive' },
           id: { not: id },
-          isArchived: false,
         },
       });
 
       if (duplicate) {
-        throw new ConflictException(`Label "${dto.name}" already exists`);
+        throw new ConflictException(`Label "${name}" already exists`);
       }
     }
 
-    return this.prisma.sessionLabel.update({
-      where: { id },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.color !== undefined && { color: dto.color }),
-        ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
-      },
-      include: {
-        category: true,
-      },
-    });
+    try {
+      return await this.prisma.sessionLabel.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name.trim() }),
+          ...(dto.color !== undefined && { color: dto.color }),
+          ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
+        },
+        include: {
+          category: true,
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new ConflictException(`Label "${dto.name?.trim()}" already exists`);
+      }
+      throw err;
+    }
   }
 
   async remove(userId: string, id: string) {

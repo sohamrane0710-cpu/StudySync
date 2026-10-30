@@ -7,6 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TimerStepType {
+  FOCUS
+  REST
+}
+
+enum TimerDirection {
+  COUNTDOWN
+  COUNT_UP
+}
+
 enum TimerPhase {
   FOCUS
   SHORT_BREAK
@@ -57,38 +67,42 @@ model Profile {
 }
 
 model UserPreference {
-  id                 String     @id @default(uuid()) @db.Uuid
-  userId             String     @unique @map("user_id") @db.Uuid
-  user               Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  theme              String     @default("dark-glass") @db.VarChar(30)
-  timerFace          String     @default("ring") @map("timer_face") @db.VarChar(30)
-  ambientPreset      String?    @map("ambient_preset") @db.VarChar(50)
-  soundVolume        Float      @default(0.7) @map("sound_volume")
-  soundEnabled       Boolean    @default(true) @map("sound_enabled")
-  autoStartBreaks    Boolean    @default(false) @map("auto_start_breaks")
-  autoStartPomodoros Boolean    @default(false) @map("auto_start_pomodoros")
-  defaultTimerModeId String?    @map("default_timer_mode_id") @db.Uuid
-  defaultTimerMode   TimerMode? @relation("DefaultTimerMode", fields: [defaultTimerModeId], references: [id], onDelete: SetNull)
-  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                   String     @id @default(uuid()) @db.Uuid
+  userId               String     @unique @map("user_id") @db.Uuid
+  user                 Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme                String     @default("dark-glass") @db.VarChar(30)
+  timerFace            String     @default("ring") @map("timer_face") @db.VarChar(30)
+  ambientPreset        String?    @map("ambient_preset") @db.VarChar(50)
+  soundVolume          Float      @default(0.7) @map("sound_volume")
+  soundEnabled         Boolean    @default(true) @map("sound_enabled")
+  autoStartBreaks      Boolean    @default(false) @map("auto_start_breaks")
+  autoStartPomodoros   Boolean    @default(false) @map("auto_start_pomodoros")
+  autoStartNextSession Boolean    @default(false) @map("auto_start_next_session")
+  defaultTimerModeId   String?    @map("default_timer_mode_id") @db.Uuid
+  defaultTimerMode     TimerMode? @relation("DefaultTimerMode", fields: [defaultTimerModeId], references: [id], onDelete: SetNull)
+  createdAt            DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("user_preferences")
 }
 
 model TimerMode {
-  id                 String   @id @default(uuid()) @db.Uuid
-  userId             String?  @map("user_id") @db.Uuid
-  user               Profile? @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name               String   @db.VarChar(60)
-  description        String?  @db.VarChar(255)
-  focusDuration      Int      @map("focus_duration")
-  shortBreakDuration Int      @map("short_break_duration")
-  longBreakDuration  Int      @map("long_break_duration")
-  longBreakInterval  Int      @default(4) @map("long_break_interval")
-  isArchived         Boolean  @default(false) @map("is_archived")
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 String         @id @default(uuid()) @db.Uuid
+  userId             String?        @map("user_id") @db.Uuid
+  user               Profile?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String         @db.VarChar(60)
+  description        String?        @db.VarChar(255)
+  isLooping          Boolean        @default(true) @map("is_looping")
+  defaultDirection   TimerDirection @default(COUNTDOWN) @map("default_direction")
+  focusDuration      Int            @default(1500) @map("focus_duration")
+  shortBreakDuration Int            @default(300) @map("short_break_duration")
+  longBreakDuration  Int            @default(900) @map("long_break_duration")
+  longBreakInterval  Int            @default(4) @map("long_break_interval")
+  isArchived         Boolean        @default(false) @map("is_archived")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  steps             TimerModeStep[]
   preferredByUsers  UserPreference[]   @relation("DefaultTimerMode")
   timerSessions     TimerSession[]
   roomStudySessions RoomStudySession[]
@@ -96,23 +110,51 @@ model TimerMode {
   @@map("timer_modes")
 }
 
+model TimerModeStep {
+  id          String        @id @default(uuid()) @db.Uuid
+  timerModeId String        @map("timer_mode_id") @db.Uuid
+  timerMode   TimerMode     @relation(fields: [timerModeId], references: [id], onDelete: Cascade)
+  name        String        @db.VarChar(60)
+  type        TimerStepType @default(FOCUS)
+  duration    Int           // Duration in seconds
+  order       Int           // 0-indexed position in sequence
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  timerSessions TimerSession[]
+
+  @@unique([timerModeId, order])
+  @@index([timerModeId, order])
+  @@map("timer_mode_steps")
+}
+
 model TimerSession {
-  id                 String      @id @default(uuid()) @db.Uuid
-  userId             String      @map("user_id") @db.Uuid
-  user               Profile     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  timerModeId        String?     @map("timer_mode_id") @db.Uuid
-  timerMode          TimerMode?  @relation(fields: [timerModeId], references: [id], onDelete: SetNull)
-  phase              TimerPhase  @default(FOCUS)
-  status             TimerStatus @default(RUNNING)
-  targetDuration     Int         @map("target_duration")
-  remainingSeconds   Int         @map("remaining_seconds")
-  startedAt          DateTime    @map("started_at") @db.Timestamptz(6)
-  expectedEndTime    DateTime?   @map("expected_end_time") @db.Timestamptz(6)
-  pausedAt           DateTime?   @map("paused_at") @db.Timestamptz(6)
-  cycleCount         Int         @default(0) @map("cycle_count")
-  totalFocusSeconds  Int         @default(0) @map("total_focus_seconds")
-  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                String         @id @default(uuid()) @db.Uuid
+  userId            String         @map("user_id") @db.Uuid
+  user              Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timerModeId       String?        @map("timer_mode_id") @db.Uuid
+  timerMode         TimerMode?     @relation(fields: [timerModeId], references: [id], onDelete: SetNull)
+  stepId            String?        @map("step_id") @db.Uuid
+  step              TimerModeStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  stepIndex         Int            @default(0) @map("step_index")
+  stepName          String?        @map("step_name") @db.VarChar(60)
+  stepType          TimerStepType? @map("step_type")
+  totalSteps        Int            @default(1) @map("total_steps")
+  direction         TimerDirection @default(COUNTDOWN)
+  phase             TimerPhase     @default(FOCUS)
+  status            TimerStatus    @default(RUNNING)
+  targetDuration    Int            @map("target_duration")
+  remainingSeconds  Int            @map("remaining_seconds")
+  elapsedSeconds    Int            @default(0) @map("elapsed_seconds")
+  startedAt         DateTime       @map("started_at") @db.Timestamptz(6)
+  expectedEndTime   DateTime?      @map("expected_end_time") @db.Timestamptz(6)
+  pausedAt          DateTime?      @map("paused_at") @db.Timestamptz(6)
+  resumedAt         DateTime?      @map("resumed_at") @db.Timestamptz(6)
+  sequenceSnapshot  Json?          @map("sequence_snapshot")
+  cycleCount        Int            @default(0) @map("cycle_count")
+  totalFocusSeconds Int            @default(0) @map("total_focus_seconds")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   studySessions StudySession[]
 
@@ -165,6 +207,8 @@ model StudySession {
   roomStudySessionId String?            @map("room_study_session_id") @db.Uuid
   roomStudySession   RoomStudySession?  @relation(fields: [roomStudySessionId], references: [id], onDelete: SetNull)
   title              String?            @db.VarChar(120)
+  stepName           String?            @map("step_name") @db.VarChar(60)
+  stepIndex          Int?               @map("step_index")
   phase              TimerPhase         @default(FOCUS)
   status             StudySessionStatus @default(COMPLETED)
   targetDuration     Int                @map("target_duration")
