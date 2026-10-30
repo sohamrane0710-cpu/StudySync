@@ -19,10 +19,12 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing Authorization header');
     }
 
-    const [scheme, token] = authHeader.split(' ');
-    if (scheme?.toLowerCase() !== 'bearer' || !token) {
+    const parts = authHeader.trim().split(/\s+/);
+    if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
       throw new UnauthorizedException('Invalid Authorization header format. Expected "Bearer <token>"');
     }
+
+    const token = parts[1];
 
     const user = await this.authService.verifyToken(token);
     (request as any).user = user;

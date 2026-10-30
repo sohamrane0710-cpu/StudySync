@@ -27,7 +27,7 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  CORS_ORIGIN: string = 'http://localhost:5173';
+  CORS_ORIGIN: string = 'http://localhost:5173,http://localhost:5174';
 
   @IsString()
   DATABASE_URL: string;

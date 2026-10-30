@@ -28,6 +28,14 @@ export class AuthService {
     }
   }
 
+  getDevSecret(): string {
+    return (
+      this.configService.get<string>('devAuthSecret') ||
+      this.configService.get<string>('supabaseJwtSecret') ||
+      'local-studysync-dev-jwt-secret-do-not-use-in-prod-32c'
+    );
+  }
+
   async verifyToken(token: string): Promise<AuthenticatedUser> {
     const authMode = this.configService.get<string>('authMode') || 'dev';
     const nodeEnv = this.configService.get<string>('nodeEnv');
@@ -57,21 +65,18 @@ export class AuthService {
         }
       } else {
         // Dev auth mode (supported only outside production)
-        const secret =
-          this.configService.get<string>('devAuthSecret') ||
-          this.configService.get<string>('supabaseJwtSecret') ||
-          'local-studysync-dev-jwt-secret-do-not-use-in-prod-32c';
-
-        payload = jwt.verify(token, secret);
+        const secret = this.getDevSecret();
+        payload = jwt.verify(token, secret, { algorithms: ['HS256'] });
       }
     } catch (err: any) {
       this.logger.debug(`Token verification failed: ${err.message}`);
       throw new UnauthorizedException('Invalid or expired authentication token');
     }
 
-    const userId = payload.sub;
-    if (!userId) {
-      throw new UnauthorizedException('Token missing subject identifier (user ID)');
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const userId = payload?.sub;
+    if (!userId || typeof userId !== 'string' || !UUID_REGEX.test(userId)) {
+      throw new UnauthorizedException('Token missing valid UUID subject identifier');
     }
 
     const email = payload.email || `${userId.slice(0, 8)}@studysync.local`;
@@ -155,9 +160,7 @@ export class AuthService {
       throw new Error('generateDevToken is forbidden in production environment');
     }
 
-    const secret =
-      this.configService.get<string>('devAuthSecret') ||
-      'local-studysync-dev-jwt-secret-do-not-use-in-prod-32c';
+    const secret = this.getDevSecret();
 
     return jwt.sign(
       {
@@ -168,7 +171,7 @@ export class AuthService {
         },
       },
       secret,
-      { expiresIn: '7d' },
+      { expiresIn: '7d', algorithm: 'HS256' },
     );
   }
 }

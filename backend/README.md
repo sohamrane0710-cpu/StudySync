@@ -58,7 +58,39 @@ npm run start:dev
 
 ---
 
-## 2. Environment Variables Reference
+---
+
+## 2. Local Development Authentication & API Testing
+
+Protected endpoints (e.g. `/api/v1/timer-modes`, `/api/v1/users/me`, `/api/v1/rooms`) require an HTTP `Authorization: Bearer <token>` header.
+
+### 2.1 Generating a Development Token
+To test endpoints locally in development mode (`AUTH_MODE=dev`), generate a valid test JWT using the local CLI helper:
+```bash
+npm run dev:token
+```
+You can optionally pass custom user details:
+```bash
+npm run dev:token -- "<uuid>" "user@example.com" "custom_username"
+```
+The helper outputs the token without exposing the private signing secret.
+
+### 2.2 Using Development Tokens in Swagger UI
+1. Start the backend: `npm run start:dev`.
+2. Open Swagger UI in your browser: [http://localhost:3000/api/docs](http://localhost:3000/api/docs).
+3. Click the green **Authorize** button at the top right of the page.
+4. Paste the generated token into the `Value` field (without the `Bearer ` prefix) and click **Authorize**.
+5. All protected endpoints (including `GET /api/v1/timer-modes`) can now be executed directly from Swagger.
+
+### 2.3 Using Development Tokens with curl / HTTP Clients
+```bash
+TOKEN=$(npm run --silent dev:token | sed -n '/^eyJ/p')
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/v1/timer-modes
+```
+
+---
+
+## 3. Environment Variables Reference
 
 | Variable | Description | Default / Example |
 |---|---|---|
@@ -77,7 +109,7 @@ npm run start:dev
 
 ---
 
-## 3. Database Migrations Workflow
+## 4. Database Migrations Workflow
 
 Prisma migrations serve as the single source of truth for the database schema:
 
@@ -106,7 +138,7 @@ npm run prisma:studio
 
 ---
 
-## 4. Connecting to Supabase in Production
+## 5. Connecting to Supabase in Production
 
 When ready to connect to a live Supabase project:
 
@@ -133,29 +165,52 @@ When ready to connect to a live Supabase project:
 
 ---
 
-## 5. Automated Testing
+## 6. Automated Testing & Database Safety
 
-All tests run against the local test database without requiring a live Supabase connection:
+The test suite strictly separates safe, offline unit tests from isolated database integration tests:
 
+### 6.1 Unit Tests (Safe Anywhere, Zero Database Connections)
 ```bash
-# Run all unit and integration test suites sequentially
+# Run unit tests: auth guards, token validation, and safety isolation guards
 npm test
-
-# Run tests with coverage report
-npm run test:cov
-
-# Run specific test file
-npx jest --runInBand test/timer-state-machine.spec.ts
+# or
+npm run test:unit
 ```
+These tests mock database dependencies and run completely in-memory without accessing, connecting to, or modifying any PostgreSQL database. They include 36 automated unit and adversarial tests covering:
+- Authentication guard and token validation.
+- Rejection of remote Supabase and cloud URLs.
+- Rejection of spoofed hostnames containing `localhost` or `127.0.0.1` as substrings.
+- Rejection of development and production databases lacking the `_test` suffix.
+- Verification that pre-connection safety guards abort before any Prisma connection is made.
 
-### Test Coverage Highlights
-- `test/auth.spec.ts`: Rejection of unauthenticated/tampered requests, identity derivation from JWT `sub`.
-- `test/timer-state-machine.spec.ts`: START, PAUSE, RESUME, COMPLETE, authoritative calculations, and idempotent completion without duplicate credits.
-- `test/organization.spec.ts`: Cross-user category and label isolation, parent category verification.
-- `test/rooms-and-invitations.spec.ts`: Public room capacity, private room access denial, cryptographic token generation (SHA-256 hash storage), usage limits, and revocation.
-- `test/chat.spec.ts`: Membership verification, author-only edits, soft deletion.
-- `test/collaboration-and-participants.spec.ts`: Shared timer lifecycle, independent participant join/leave calculations, partial credit for late joiners.
-- `test/analytics.spec.ts`: Daily/weekly summaries, category and label breakdowns without double-counting.
+### 6.2 Integration Tests (Requires Isolated Local Test Database)
+Integration tests require a dedicated, isolated test database whose name **strictly ends with `_test`** on an approved local host.
+
+1. **Create the dedicated test database** (once):
+   ```bash
+   # Via local Docker container
+   docker exec studysync-postgres psql -U postgres -c 'CREATE DATABASE studysync_test;'
+   # Or via local psql
+   createdb studysync_test
+   ```
+
+2. **Deploy schema migrations to the test database**:
+   ```bash
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/studysync_test?schema=public" npx prisma migrate deploy
+   ```
+
+3. **Run integration tests**:
+   ```bash
+   TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/studysync_test?schema=public" npm run test:integration
+   ```
+
+> [!CAUTION]
+> **Database Safety Invariants**:
+> 1. **Explicit Opt-In Required**: `TEST_DATABASE_URL` is mandatory. The test harness **never** falls back to `DATABASE_URL`. If `TEST_DATABASE_URL` is missing, integration tests fail closed immediately.
+> 2. **Strict Host Parsing**: Hostnames are parsed using WHATWG `URL` and validated against exact approved local hosts (`localhost`, `127.0.0.1`, `[::1]`). Substring checks are forbidden. Docker hostname `postgres` is only permitted when `TEST_ALLOW_DOCKER_HOST=true` is explicitly set.
+> 3. **Database Name Policy**: The database name in `TEST_DATABASE_URL` must end in `_test`. Ordinary development databases (e.g. `studysync`, `postgres`) are rejected, even on localhost.
+> 4. **Pre-Connection & Runtime Verification**: `createTestApp()` validates the URL before initializing the Nest application or Prisma client. `cleanDatabase()` performs an active `SELECT current_database()` query to ensure the connected database name ends with `_test` before executing any table deletes.
+> 5. **Credential Protection**: Connection passwords and raw database URLs are never printed in test output, error messages, or logs.
 
 ---
 

@@ -13,11 +13,31 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') || 3000;
   const apiPrefix = configService.get<string>('apiPrefix') || 'api/v1';
-  const corsOrigin = configService.get<string>('corsOrigin') || 'http://localhost:5173';
+  const nodeEnv = configService.get<string>('nodeEnv') || 'development';
+  const corsOrigin = configService.get<string>('corsOrigin') || '';
+
+  const configuredOrigins = corsOrigin
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  let allowedOrigins: string[];
+  if (nodeEnv === 'production') {
+    allowedOrigins = configuredOrigins;
+  } else {
+    // In development, allow explicitly configured local frontend origins including both 5173 and 5174
+    const localDevOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
+    ];
+    allowedOrigins = Array.from(new Set([...configuredOrigins, ...localDevOrigins]));
+  }
 
   // Enable CORS
   app.enableCors({
-    origin: corsOrigin.includes(',') ? corsOrigin.split(',') : corsOrigin,
+    origin: allowedOrigins,
     credentials: true,
   });
 

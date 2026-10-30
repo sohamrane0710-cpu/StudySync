@@ -8,7 +8,8 @@
 | **Phase B** | Backend Foundation (NestJS, strict TS, Prisma, Swagger, health, error filter, logger) | **COMPLETED** | AppModule, PrismaService, Swagger at `/api/docs`, RFC 7807 error filter, structured logger |
 | **Phase C** | Personal Study Domain (profiles, preferences, timer modes, personal timers, study history, categories, labels, analytics) | **COMPLETED** | Authoritative server timestamps, composite ownership, idempotent completion |
 | **Phase D** | Collaborative Features (rooms, membership, cryptographic invites, chat, room timers, participant tracking, WebSocket gateway) | **COMPLETED** | Role guards, SHA-256 invite token hashes, independent participant credit tracking, Socket.IO gateway |
-| **Phase E** | Verification, testing, production build, READMEs | **COMPLETED** | 25/25 automated tests passed, `npm run build` succeeds cleanly, documentation complete |
+| **Phase E** | Verification, testing, production build, READMEs | **COMPLETED** | Automated tests passed, `npm run build` succeeds cleanly, documentation complete |
+| **Dev Auth & Safety** | Safe dev token generation, test isolation & fail-closed remote DB guards | **COMPLETED** | `npm run dev:token` utility, offline unit tests in `test/auth.spec.ts`, fail-closed remote database guards |
 
 ---
 
@@ -26,6 +27,8 @@
 - [x] 10. Shared room timer concurrency and state management (`test/collaboration-and-participants.spec.ts`).
 - [x] 11. Individual participant tracking (late joiners receive partial credit for actual attendance) (`test/collaboration-and-participants.spec.ts`).
 - [x] 12. Study analytics aggregation without double-counting (`test/analytics.spec.ts`).
+- [x] 13. Dynamic development token secret synchronization and CLI token generator (`scripts/generate-dev-token.ts`).
+- [x] 14. Fail-closed safety guards preventing destructive test cleanup on remote Supabase databases (`test/test-helper.ts`).
 
 ---
 
