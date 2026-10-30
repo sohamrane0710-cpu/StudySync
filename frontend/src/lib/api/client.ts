@@ -1,6 +1,26 @@
 import type { ApiErrorResponse } from '@/types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const RAW_API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:3000/api/v1';
+export const API_BASE_URL = RAW_API_BASE_URL.replace(/\/+$/, '');
+
+export class ApiNetworkError extends Error {
+  public url: string;
+  public originalError: unknown;
+
+  constructor(url: string, originalError: unknown) {
+    const rawMsg =
+      originalError instanceof Error ? originalError.message : String(originalError);
+    super(
+      `Network Error while connecting to ${url}: ${rawMsg}. Please ensure the backend server is running on http://localhost:3000.`
+    );
+    this.name = 'ApiNetworkError';
+    this.url = url;
+    this.originalError = originalError;
+  }
+}
 
 export class ApiClientError extends Error {
   public statusCode: number;
@@ -84,7 +104,12 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     headers: requestHeaders,
   };
 
-  const response = await fetch(url, config);
+  let response: Response;
+  try {
+    response = await fetch(url, config);
+  } catch (fetchErr: unknown) {
+    throw new ApiNetworkError(url, fetchErr);
+  }
 
   // Handle empty responses (204 No Content)
   if (response.status === 204) {

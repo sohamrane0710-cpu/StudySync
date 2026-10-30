@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
-import { setAuthToken, getAuthToken, setTokenProvider } from '@/lib/api/client';
+import { setAuthToken, getAuthToken, setTokenProvider, ApiNetworkError } from '@/lib/api/client';
 import { usersApi } from '@/lib/api/users';
 import type { UserProfile } from '@/types/user';
 
@@ -41,9 +41,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(userProfile);
     } catch (err) {
       console.warn('[Auth] Failed to fetch user profile:', err);
-      // If 401, clear invalid token
-      updateToken(null);
-      setProfile(null);
+      if (!(err instanceof ApiNetworkError)) {
+        updateToken(null);
+        setProfile(null);
+      }
     }
   }, [updateToken]);
 
@@ -81,10 +82,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const userProfile = await usersApi.getMe();
             if (isMounted) setProfile(userProfile);
-          } catch {
-            if (isMounted) {
-              updateToken(null);
-              setProfile(null);
+          } catch (err: unknown) {
+            if (err instanceof ApiNetworkError) {
+              // Network failure or temporary backend outage: preserve token
+              console.warn('[Auth] Backend unreachable during initAuth; preserving auth token');
+            } else {
+              // Token was rejected or corrupted: clear it
+              if (isMounted) {
+                updateToken(null);
+                setProfile(null);
+              }
             }
           }
         }
@@ -177,12 +184,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userProfile = await usersApi.getMe();
       setProfile(userProfile);
-    } catch (err: any) {
-      updateToken(null);
-      setProfile(null);
-      throw new Error(
-        err.message || 'Developer login failed: token was rejected by backend or API is unreachable.'
-      );
+    } catch (err: unknown) {
+      if (err instanceof ApiNetworkError) {
+        // Network failure: preserve token, provide actionable feedback
+        throw new Error(
+          `Network Error: Unable to connect to StudySync backend at ${err.url}. Please verify that the backend server is running on http://localhost:3000.`
+        );
+      } else {
+        // Token was rejected or another error occurred: clear state
+        updateToken(null);
+        setProfile(null);
+        throw new Error(
+          err instanceof Error ? err.message : 'Developer login failed due to an unexpected error.'
+        );
+      }
     }
   };
 
